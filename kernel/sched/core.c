@@ -8494,3 +8494,14 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
 {
         trace_sched_update_nr_running_tp(rq, count);
 }
+
+
+SYSCALL_DEFINE0(get_wfq_info)
+{
+	 return 0;
+}
+
+SYSCALL_DEFINE1(set_wfq_weight, int, weight)
+{
+	 return 0;
+}
