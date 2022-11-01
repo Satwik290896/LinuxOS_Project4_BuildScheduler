@@ -8496,7 +8496,7 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
 }
 
 
-SYSCALL_DEFINE0(get_wfq_info)
+SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
 	 return 0;
 }
