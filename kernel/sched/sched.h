@@ -398,8 +398,10 @@ struct cfs_bandwidth {
 struct task_group {
 	struct cgroup_subsys_state css;
 
+#ifdef CONFIG_WFQ
 	struct sched_entity	**wfq_se;
 	struct wfq_rq		**wfq_rq;
+#endif
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* schedulable entities of this group on each CPU */
 	struct sched_entity	**se;
@@ -534,23 +536,9 @@ struct cfs_bandwidth { };
 /* WFQ-related fields in a runqueue */
 struct wfq_rq {
 	struct load_weight	load;
-	struct sched_entity	*curr;
-	struct sched_entity	*next;
-	struct sched_entity	*last;
-	struct sched_entity	*skip;
-	
-	struct rq		*rq;	/* CPU runqueue to which this cfs_rq is attached */
-
-	/*
-	 * leaf wfq_rqs are those that hold tasks (lowest schedulable entity in
-	 * a hierarchy). Non-leaf lrqs hold other higher schedulable entities
-	 * (like users, containers etc.)
-	 *
-	 * leaf_cfs_rq_list ties together list of leaf wfq_rq's in a CPU.
-	 * This list is used during load balance.
-	 */
+	struct list_head	wfq_rq_list;
+	struct task_struct	*curr;
 	int			on_list;
-	struct list_head	leaf_wfq_rq_list;
 	struct task_group	*tg;	/* group that "owns" this runqueue */	
 };
 
@@ -972,8 +960,6 @@ struct rq {
 	struct dl_rq		dl;
 	/*Used like an rt/cfs*/
 	struct wfq_rq		wfq;
-	/*Used like an Idle*/
-	struct task_struct	*wfq_temp;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this CPU: */
