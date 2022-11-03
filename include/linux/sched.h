@@ -710,6 +710,8 @@ struct task_struct {
 	struct task_group		*sched_task_group;
 #endif
 	struct sched_dl_entity		dl;
+	
+	struct list_head		wfq;
 
 #ifdef CONFIG_UCLAMP_TASK
 	/*

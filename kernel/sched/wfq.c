@@ -9,12 +9,12 @@
 static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
-
+	list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
 }
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
-
+	list_del(&p->wfq);
 }
 
 static void yield_task_wfq(struct rq *rq)
@@ -33,7 +33,9 @@ static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int fla
 
 static struct task_struct *pick_next_task_wfq(struct rq *rq)
 {
-	return NULL;
+	struct task_struct *p;
+	p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+	return p;
 }
 
 static void put_prev_task_wfq(struct rq *rq, struct task_struct *prev)
