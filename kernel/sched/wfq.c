@@ -2,6 +2,7 @@
 
 #include "pelt.h"
 
+#define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -9,6 +10,18 @@ void init_wfq_rq(struct wfq_rq *wfq_rq)
 	INIT_LIST_HEAD(&rq->wfq);
 }
 
+static s64 wfq_cmp(void *priv, const struct list_head *a,
+					const struct list_head *b)
+{
+	struct le_wfq1 *ra = list_entry(a, struct task_struct, wfq);
+	struct le_wfq2 *rb = list_entry(b, struct task_struct, wfq);
+
+	u64	param1 = MAX_WEIGHT_WFQ/(ra->wfq_weight);
+	u64	param2 = MAX_WEIGHT_WFQ/(rb->wfq_weight);
+	s64	delta = (s64)(param1 - param2);
+	return delta;
+}
+					
 /*
  * Adding/removing a task to/from a priority array:
  */
@@ -16,8 +29,10 @@ static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+	p->wfq_vruntime = 0;
 	p->wfq_weight = 10;
 	rq->wfq.load.weight += p->wfq_weight;
+	list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 }
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
@@ -53,12 +68,14 @@ static void put_prev_task_wfq(struct rq *rq, struct task_struct *prev)
 
 static void set_next_task_wfq(struct rq *rq, struct task_struct *next, bool first)
 {
-
+	
 }
 
 
 static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 {
+	/*Ideally it should be (1/task_weight)*/
+	curr->wfq_vruntime += 1;
 }
 
 static void

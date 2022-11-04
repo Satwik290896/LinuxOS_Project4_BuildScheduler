@@ -713,6 +713,7 @@ struct task_struct {
 	
 	struct list_head		wfq;
 	struct load_weight		wfq_weight;
+	u64				wfq_vruntime;
 
 #ifdef CONFIG_UCLAMP_TASK
 	/*
