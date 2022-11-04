@@ -712,6 +712,7 @@ struct task_struct {
 	struct sched_dl_entity		dl;
 	
 	struct list_head		wfq;
+	struct load_weight		wfq_weight;
 
 #ifdef CONFIG_UCLAMP_TASK
 	/*

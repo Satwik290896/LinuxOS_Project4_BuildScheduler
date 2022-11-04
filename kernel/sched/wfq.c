@@ -3,6 +3,12 @@
 #include "pelt.h"
 
 
+void init_wfq_rq(struct wfq_rq *wfq_rq)
+{
+	wfq_rq->load.weight = 0;
+	INIT_LIST_HEAD(&rq->wfq);
+}
+
 /*
  * Adding/removing a task to/from a priority array:
  */
@@ -10,13 +16,14 @@ static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
-	rq->wfq.load.weight += 10;
+	p->wfq_weight = 10;
+	rq->wfq.load.weight += p->wfq_weight;
 }
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	list_del(&p->wfq);
-	rq->wfq.load.weight -= 10;
+	rq->wfq.load.weight -= p->wfq_weight;
 }
 
 static void yield_task_wfq(struct rq *rq)
