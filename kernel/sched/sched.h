@@ -158,6 +158,18 @@ extern void call_trace_sched_update_nr_running(struct rq *rq, int count);
  */
 #define RUNTIME_INF		((u64)~0ULL)
 
+static inline int wfq_prio(int prio)
+{
+	if (unlikely(prio < MAX_WFQ_PRIO))
+		return 1;
+	return 0;
+}
+
+static inline int wfq_task(struct task_struct *p)
+{
+	return wfq_prio(p->prio);
+}
+
 static inline int idle_policy(int policy)
 {
 	return policy == SCHED_IDLE;

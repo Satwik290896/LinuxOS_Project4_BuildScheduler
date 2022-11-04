@@ -4826,6 +4826,8 @@ static void __setscheduler_prio(struct task_struct *p, int prio)
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(prio))
 		p->sched_class = &rt_sched_class;
+	else if (wfq_prio(prio))
+		p->sched_class = &wfq_sched_class;
 	else
 		p->sched_class = &fair_sched_class;
 

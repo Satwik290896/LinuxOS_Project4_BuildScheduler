@@ -10,11 +10,13 @@ static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+	rq->wfq.load.weight += 10;
 }
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	list_del(&p->wfq);
+	rq->wfq.load.weight -= 10;
 }
 
 static void yield_task_wfq(struct rq *rq)
