@@ -30,17 +30,34 @@ static s64 wfq_cmp(void *priv, const struct list_head *a,
 static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
-	struct task_struct *first;
 	
-	list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+	int i;
+	u64 min_weight = MAX_WEIGHT_WFQ;
+	int min_weight_cpu;
+	
+	for_each_possible_cpu(i) {
+		struct rq *rq_cpu;
+		rq_cpu = cpu_rq(i);
+		
+		if (min_weight > rq_cpu->wfq.load.weight) {
+			min_weight_cpu = i;
+			min_weight = rq_cpu->wfq.load.weight;
+		}
+	}
+	struct rq *rq_min_cpu;
+	rq_min_cpu = cpu_rq(min_weight_cpu);
+	
+	list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
 	p->wfq_vruntime = 0;
 	p->wfq_weight = 10;
-	rq->wfq.load.weight += p->wfq_weight;
-	list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+	rq_min_cpu->wfq.load.weight += p->wfq_weight;
+	list_sort(NULL, &rq_min_cpu->wfq.wfq_rq_list, wfq_cmp);
 	
-	
-	first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-	rq->wfq_rq.max_weight = first->wfq_weight;
+	if (rq_min_cpu->wfq_rq.max_weight < p->wfq_weight) {
+		struct task_struct *first;
+		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+		rq_min_cpu->wfq_rq.max_weight = first->wfq_weight;
+	}
 }
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
