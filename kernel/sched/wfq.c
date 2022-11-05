@@ -42,6 +42,9 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	int min_weight_cpu;
 	struct rq *rq_min_cpu;
 	
+	if (p->sched_class != &wfq_sched_class)
+		return;	
+		
 	if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
 		rq_min_cpu = rq;
 		rq->wfq.load.weight += p->wfq_weight_change;
@@ -79,6 +82,9 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct task_struct *first;
 	
+	if (p->sched_class != &wfq_sched_class)
+		return;	
+		
 	list_del(&p->wfq);
 	(rq->wfq.nr_running)--;
 	sub_nr_running(rq, 1);
@@ -100,7 +106,12 @@ static void yield_task_wfq(struct rq *rq)
  */
 static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
-
+	if (p->sched_class != &wfq_sched_class)
+		return;	
+	if (rq->wfq.max_weight > p->wfq_weight.weight)
+	{
+		resched_curr(rq);
+	}
 }
 
 
