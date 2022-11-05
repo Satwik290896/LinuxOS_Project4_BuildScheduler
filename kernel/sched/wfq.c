@@ -11,6 +11,7 @@ void init_wfq_rq(struct wfq_rq *wfq_rq)
 	INIT_LIST_HEAD(&wfq_rq->wfq_rq_list);
 	wfq_rq->rq_cpu_runtime = 0;
 	wfq_rq->max_weight = 0;
+	wfq_rq->nr_running = 0;
 }
 
 static int wfq_cmp(void *priv, const struct list_head *a,
@@ -54,6 +55,8 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	rq_min_cpu = cpu_rq(min_weight_cpu);
 	
 	list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
+	(rq_min_cpu->wfq.nr_running)++;
+	add_nr_running(rq_min_cpu, 1);
 	p->wfq_vruntime = 0;
 	p->wfq_weight.weight = 10;
 	rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
@@ -71,6 +74,9 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	struct task_struct *first;
 	
 	list_del(&p->wfq);
+	(rq->wfq.nr_running)--;
+	sub_nr_running(rq, 1);
+	
 	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
 	
