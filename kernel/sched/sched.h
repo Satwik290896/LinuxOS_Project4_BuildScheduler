@@ -550,6 +550,7 @@ struct wfq_rq {
 	struct load_weight	load;
 	struct list_head	wfq_rq_list;
 	struct task_struct	*curr;
+	unsigned int		nr_running;
 	u64			rq_cpu_runtime;
 	unsigned long		max_weight;
 	int			on_list;
