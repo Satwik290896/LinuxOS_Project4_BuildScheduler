@@ -39,6 +39,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	
 	int i;
+	struct rq_flags rf;
 	u64 min_weight = MAX_WEIGHT_WFQ;
 	int min_weight_cpu;
 	struct rq *rq_min_cpu;
@@ -54,15 +55,24 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		for_each_possible_cpu(i) {
 			struct rq *rq_cpu;
 			rq_cpu = cpu_rq(i);
-		
+			
+			if (rq_cpu != rq)
+				rq_lock(rq_cpu, &rf);
+	
 			if (min_weight > rq_cpu->wfq.load.weight) {
 				min_weight_cpu = i;
 				min_weight = rq_cpu->wfq.load.weight;
 			}
+			
+			if (rq_cpu != rq)
+				rq_unlock(rq_cpu, &rf);
 		}
 	
 		rq_min_cpu = cpu_rq(min_weight_cpu);
 	
+		if (rq_min_cpu != rq)
+			rq_lock(rq_min_cpu, &rf);
+			
 		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
 		(rq_min_cpu->wfq.nr_running)++;
 		add_nr_running(rq_min_cpu, 1);
@@ -77,7 +87,13 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		first = list_first_entry(&rq_min_cpu->wfq.wfq_rq_list, struct task_struct, wfq);
 		rq_min_cpu->wfq.max_weight = first->wfq_weight.weight;
 	}
+	
+	if (rq_min_cpu != rq)
+		rq_unlock(rq_min_cpu, &rf);
 }
+
+
+
 
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -99,7 +115,7 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 
 static void yield_task_wfq(struct rq *rq)
 {
-
+	return;
 }
 
 /*
@@ -119,22 +135,27 @@ static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int fla
 static struct task_struct *pick_next_task_wfq(struct rq *rq)
 {
 	struct task_struct *p;
+	
+	if (rq->wfq.nr_running < 1)
+		return NULL;
+
 	p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
 	return p;
 }
 
 static void update_curr_wfq(struct rq *rq)
 {
-	
+	return;	
 }
 
 static void put_prev_task_wfq(struct rq *rq, struct task_struct *prev)
 {
+	return;
 }
 
 static void set_next_task_wfq(struct rq *rq, struct task_struct *next, bool first)
 {
-	
+	return;	
 }
 
 
@@ -160,12 +181,13 @@ static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 static void
 prio_changed_wfq(struct rq *rq, struct task_struct *p, int oldprio)
 {
-
+	return;
 }
 
 static void switched_to_wfq(struct rq *rq, struct task_struct *p)
 {
-
+	/*Switched from other run queue to here*/
+	return;
 }
 
 static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
@@ -176,13 +198,13 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 #ifdef CONFIG_SMP
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
-	return 0;
+	return 1;
 }
 
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
-	return 0;
+	return cpu;
 }
 
 static void rq_online_wfq(struct rq *rq)
@@ -202,7 +224,8 @@ static void task_woken_wfq(struct rq *rq, struct task_struct *p)
 
 static void switched_from_wfq(struct rq *rq, struct task_struct *p)
 {
-
+	/*Switched to other run queue from here*/
+	return;
 }
 
 #endif
