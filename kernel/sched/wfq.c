@@ -62,8 +62,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
 		(rq_min_cpu->wfq.nr_running)++;
 		add_nr_running(rq_min_cpu, 1);
-		p->wfq_vruntime = 0;
-		p->wfq_weight.weight = 10;
+
 		rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
 	}
 	

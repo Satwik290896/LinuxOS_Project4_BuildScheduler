@@ -3110,6 +3110,11 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 
+	p->wfq_vruntime = 0;
+	p->wfq_weight.weight = 10;
+	p->wfq_weight_change = 0;
+	INIT_LIST_HEAD(&p->wfq);
+		
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
