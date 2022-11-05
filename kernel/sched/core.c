@@ -8506,17 +8506,19 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
  */ 
 SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
-	if (!wfq_info_struct)
-		return -EINVAL;
-
 	struct wfq_info *wfq_info_buf;
 	int ret = 0;
 	int i;
+
+	if (!wfq_info_struct)
+		return -EINVAL;
+
 	wfq_info_buf = kmalloc(sizeof(struct wfq_info), GFP_KERNEL);
 	wfq_info_buf->num_cpus = 0;
 	for_each_possible_cpu(i) {
 		if (wfq_info_buf->num_cpus < MAX_CPUS_WFQ_INFO) {
 			struct rq *rq_cpu;
+
 			rq_cpu = cpu_rq(i);
 			wfq_info_buf->nr_running[wfq_info_buf->num_cpus] = rq_cpu->wfq.nr_running;
 			wfq_info_buf->total_weight[wfq_info_buf->num_cpus] = rq_cpu->wfq.load.weight;
@@ -8524,7 +8526,7 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 		(wfq_info_buf->num_cpus)++;
 	}
 	
-	if(copy_to_user(wfq_info_struct, wfq_info_buf, sizeof(struct wfq_info))) {
+	if (copy_to_user(wfq_info_struct, wfq_info_buf, sizeof(struct wfq_info))) {
 		kfree(wfq_info_buf);
 		return -EFAULT;
 	}
@@ -8543,6 +8545,8 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
  */ 
 SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
+	struct rq *rq;
+
 	if (!capable(CAP_SYS_ADMIN))
 		return -EACCES;
 	if (weight < 1)
@@ -8556,8 +8560,8 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 	if (current->sched_class != &wfq_sched_class)
 		return 0;
 	
-	struct rq *rq = task_rq(current);
-	current->sched_class->dequeue_task(current);
+	rq = task_rq(current);
+	current->sched_class->dequeue_task(rq, current, 0);
 	current->sched_class->enqueue_task(rq, current, 0);
 	
 	return 0;
