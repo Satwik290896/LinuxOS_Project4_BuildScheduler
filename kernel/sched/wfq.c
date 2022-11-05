@@ -2,6 +2,7 @@
 #include "sched.h"
 #include "pelt.h"
 #include "linux/list_sort.h"
+#include "linux/math64.h"
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 
@@ -22,10 +23,10 @@ static int wfq_cmp(void *priv, const struct list_head *a,
 
 	u64	param1 = MAX_WEIGHT_WFQ/(ra->wfq_weight.weight);
 	u64	param2 = MAX_WEIGHT_WFQ/(rb->wfq_weight.weight);
-	/*s64	delta = (s64)(param1 - param2);*/
-	if (param1 > param2)
+	s64	delta = (s64)(param1 - param2);
+	if (delta > 0)
 		return 1;
-	else if (param1 < param2)
+	else if (delta < 0)
 		return -1;
 	return 0;
 }
