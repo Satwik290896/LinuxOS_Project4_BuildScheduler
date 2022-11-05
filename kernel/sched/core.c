@@ -8513,6 +8513,7 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
 	struct wfq_info wfq_info_local;
 	int i;
+	struct rq_flags rf;
 
 	if (!wfq_info_struct)
 		return -EINVAL;
@@ -8523,8 +8524,10 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 			struct rq *rq_cpu;
 
 			rq_cpu = cpu_rq(i);
+			rq_lock(rq_cpu, &rf);
 			wfq_info_local.nr_running[wfq_info_local.num_cpus] = rq_cpu->wfq.nr_running;
 			wfq_info_local.total_weight[wfq_info_local.num_cpus] = rq_cpu->wfq.load.weight;
+			rq_unlock(rq_cpu, &rf);
 		}
 		(wfq_info_local.num_cpus)++;
 	}
@@ -8545,6 +8548,7 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	struct rq *rq;
+	struct rq_flags rf;
 
 	if (weight < 1)
 		return -EINVAL;
@@ -8564,7 +8568,9 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 		return 0;
 	
 	rq = task_rq(current);
+	rq_lock(rq, &rf);
 	current->sched_class->enqueue_task(rq, current, ENQUEUE_WFQ_WEIGHT_UPD);
+	rq_unlock(rq, &rf);
 	
 	return 0;
 }
