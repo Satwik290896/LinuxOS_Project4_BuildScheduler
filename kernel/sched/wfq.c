@@ -1,6 +1,7 @@
-#include "sched.h"
 
+#include "sched.h"
 #include "pelt.h"
+#include "linux/list_sort.h"
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 
@@ -12,16 +13,20 @@ void init_wfq_rq(struct wfq_rq *wfq_rq)
 	wfq_rq->max_weight = 0;
 }
 
-static s64 wfq_cmp(void *priv, const struct list_head *a,
+static int wfq_cmp(void *priv, const struct list_head *a,
 					const struct list_head *b)
 {
-	struct le_wfq1 *ra = list_entry(a, struct task_struct, wfq);
-	struct le_wfq2 *rb = list_entry(b, struct task_struct, wfq);
+	struct task_struct *ra = list_entry(a, struct task_struct, wfq);
+	struct task_struct *rb = list_entry(b, struct task_struct, wfq);
 
-	u64	param1 = MAX_WEIGHT_WFQ/(ra->wfq_weight);
-	u64	param2 = MAX_WEIGHT_WFQ/(rb->wfq_weight);
-	s64	delta = (s64)(param1 - param2);
-	return delta;
+	u64	param1 = MAX_WEIGHT_WFQ/(ra->wfq_weight.weight);
+	u64	param2 = MAX_WEIGHT_WFQ/(rb->wfq_weight.weight);
+	/*s64	delta = (s64)(param1 - param2);*/
+	if (param1 > param2)
+		return 1;
+	else if (param1 < param2)
+		return -1;
+	return 0;
 }
 					
 /*
@@ -34,6 +39,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	int i;
 	u64 min_weight = MAX_WEIGHT_WFQ;
 	int min_weight_cpu;
+	struct rq *rq_min_cpu;
 	
 	for_each_possible_cpu(i) {
 		struct rq *rq_cpu;
@@ -44,19 +50,19 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 			min_weight = rq_cpu->wfq.load.weight;
 		}
 	}
-	struct rq *rq_min_cpu;
+	
 	rq_min_cpu = cpu_rq(min_weight_cpu);
 	
 	list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
 	p->wfq_vruntime = 0;
-	p->wfq_weight = 10;
-	rq_min_cpu->wfq.load.weight += p->wfq_weight;
+	p->wfq_weight.weight = 10;
+	rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
 	list_sort(NULL, &rq_min_cpu->wfq.wfq_rq_list, wfq_cmp);
 	
-	if (rq_min_cpu->wfq_rq.max_weight < p->wfq_weight) {
+	if (rq_min_cpu->wfq.max_weight < p->wfq_weight.weight) {
 		struct task_struct *first;
 		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-		rq_min_cpu->wfq_rq.max_weight = first->wfq_weight;
+		rq_min_cpu->wfq.max_weight = first->wfq_weight.weight;
 	}
 }
 
@@ -65,11 +71,11 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	struct task_struct *first;
 	
 	list_del(&p->wfq);
-	rq->wfq.load.weight -= p->wfq_weight;
+	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
 	
 	first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-	rq->wfq_rq.max_weight = first->wfq_weight;
+	rq->wfq.max_weight = first->wfq_weight.weight;
 }
 
 static void yield_task_wfq(struct rq *rq)
@@ -116,9 +122,9 @@ static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 	
 	/*Ideally it should be (1/total_task_weight). 
 	 * We count it and wherever required divide */
-	rq->wfq_rq.rq_cpu_runtime += 1;
+	rq->wfq.rq_cpu_runtime += 1;
 	
-	if (rq->wfq_rq.max_weight > curr->wfq_weight)
+	if (rq->wfq.max_weight > curr->wfq_weight.weight)
 	{
 		resched_curr(rq);
 	}
