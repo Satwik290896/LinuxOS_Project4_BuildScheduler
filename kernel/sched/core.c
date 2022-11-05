@@ -3110,6 +3110,11 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 
+	p->wfq_vruntime = 0;
+	p->wfq_weight.weight = 10;
+	p->wfq_weight_change = 0;
+	INIT_LIST_HEAD(&p->wfq);
+		
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -8541,23 +8546,25 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	struct rq *rq;
 
-	if (!capable(CAP_SYS_ADMIN) && weight > 10)
-		return -EACCES;
-
 	if (weight < 1)
 		return -EINVAL;
+	else if (weight > 10) {
+		if (!capable(CAP_SYS_ADMIN))
+			return -EACCES;
+	}
 
 	if (task_pid_vnr(current) < 0)
 		return -EPERM;
 
+	current->wfq_weight_change = weight - (current->wfq_weight.weight);
 	current->wfq_weight.weight = weight;
+	
 	
 	if (current->sched_class != &wfq_sched_class)
 		return 0;
 	
 	rq = task_rq(current);
-	current->sched_class->dequeue_task(rq, current, 0);
-	current->sched_class->enqueue_task(rq, current, 0);
+	current->sched_class->enqueue_task(rq, current, ENQUEUE_WFQ_WEIGHT_UPD);
 	
 	return 0;
 }
