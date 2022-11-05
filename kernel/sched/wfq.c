@@ -116,7 +116,9 @@ static void set_next_task_wfq(struct rq *rq, struct task_struct *next, bool firs
 
 static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 {
-
+	if (curr->sched_class != &wfq_sched_class)
+		return;
+		
 	/*Ideally it should be (1/task_weight)*/
 	curr->wfq_vruntime += 1;
 	
@@ -142,9 +144,44 @@ static void switched_to_wfq(struct rq *rq, struct task_struct *p)
 
 }
 
+static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
+{
+	return 0;
+}
 
+#ifdef CONFIG_SMP
+static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
+{
+	return 0;
+}
 
+static int
+select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
+{
+	return 0;
+}
 
+static void rq_online_wfq(struct rq *rq)
+{
+
+}
+
+static void rq_offline_wfq(struct rq *rq)
+{
+
+}
+
+static void task_woken_wfq(struct rq *rq, struct task_struct *p)
+{
+
+}
+
+static void switched_from_wfq(struct rq *rq, struct task_struct *p)
+{
+
+}
+
+#endif
 
 const struct sched_class wfq_sched_class
 	__section("__wfq_sched_class") = {
@@ -158,7 +195,7 @@ const struct sched_class wfq_sched_class
 	.put_prev_task		= put_prev_task_wfq,
 	.set_next_task          = set_next_task_wfq,
 
-/*
+
 #ifdef CONFIG_SMP
 	.balance		= balance_wfq,
 	.select_task_rq		= select_task_rq_wfq,
@@ -169,21 +206,20 @@ const struct sched_class wfq_sched_class
 	.switched_from		= switched_from_wfq,
 	
 #endif
-*/
+
 
 	.task_tick		= task_tick_wfq,
 
-	/*.get_rr_interval	= get_rr_interval_wfq,
-	*/
+	.get_rr_interval	= get_rr_interval_wfq,
+	
 	.prio_changed		= prio_changed_wfq,
 	.switched_to		= switched_to_wfq,
 
 	.update_curr		= update_curr_wfq,
 
-/*
 #ifdef CONFIG_UCLAMP_TASK
 	.uclamp_enabled		= 1,
 	
 #endif
-*/
+
 };
