@@ -8543,5 +8543,22 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
  */ 
 SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
-	 return 0;
+	if (!capable(CAP_SYS_ADMIN))
+		return -EACCES;
+	if (weight < 1)
+		return -EINVAL;
+
+	if (task_pid_vnr(current) < 0)
+		return -EPERM;
+
+	current->wfq_weight.weight = weight;
+	
+	if (current->sched_class != &wfq_sched_class)
+		return 0;
+	
+	struct rq *rq = task_rq(current);
+	current->sched_class->dequeue_task(current);
+	current->sched_class->enqueue_task(rq, current, 0);
+	
+	return 0;
 }
