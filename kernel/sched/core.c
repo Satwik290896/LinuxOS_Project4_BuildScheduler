@@ -8506,35 +8506,29 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
  */ 
 SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
-	struct wfq_info *wfq_info_buf;
-	int ret = 0;
+	struct wfq_info wfq_info_local;
 	int i;
 
 	if (!wfq_info_struct)
 		return -EINVAL;
 
-	wfq_info_buf = kmalloc(sizeof(struct wfq_info), GFP_KERNEL);
-	wfq_info_buf->num_cpus = 0;
+	wfq_info_local.num_cpus = 0;
 	for_each_possible_cpu(i) {
-		if (wfq_info_buf->num_cpus < MAX_CPUS_WFQ_INFO) {
+		if (wfq_info_local.num_cpus < MAX_CPUS_WFQ_INFO) {
 			struct rq *rq_cpu;
 
 			rq_cpu = cpu_rq(i);
-			wfq_info_buf->nr_running[wfq_info_buf->num_cpus] = rq_cpu->wfq.nr_running;
-			wfq_info_buf->total_weight[wfq_info_buf->num_cpus] = rq_cpu->wfq.load.weight;
+			wfq_info_local.nr_running[wfq_info_local.num_cpus] = rq_cpu->wfq.nr_running;
+			wfq_info_local.total_weight[wfq_info_local.num_cpus] = rq_cpu->wfq.load.weight;
 		}
-		(wfq_info_buf->num_cpus)++;
+		(wfq_info_local.num_cpus)++;
 	}
 	
-	if (copy_to_user(wfq_info_struct, wfq_info_buf, sizeof(struct wfq_info))) {
-		kfree(wfq_info_buf);
+	if (copy_to_user(wfq_info_struct, &wfq_info_local, sizeof(struct wfq_info))) {
 		return -EFAULT;
 	}
 
-	ret = wfq_info_buf->num_cpus;
-	kfree(wfq_info_buf);
-
-	return ret;
+	return wfq_info_local.num_cpus;
 }
 
 /* This system call will change the weight for the calling process.
@@ -8547,8 +8541,9 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	struct rq *rq;
 
-	if (!capable(CAP_SYS_ADMIN))
+	if (!capable(CAP_SYS_ADMIN) && weight > 10)
 		return -EACCES;
+
 	if (weight < 1)
 		return -EINVAL;
 
