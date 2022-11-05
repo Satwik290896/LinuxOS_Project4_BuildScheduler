@@ -8563,8 +8563,7 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 		return 0;
 	
 	rq = task_rq(current);
-	current->sched_class->dequeue_task(rq, current, 0);
-	current->sched_class->enqueue_task(rq, current, 0);
+	current->sched_class->enqueue_task(rq, current, ENQUEUE_WFQ_WEIGHT_UPD);
 	
 	return 0;
 }
