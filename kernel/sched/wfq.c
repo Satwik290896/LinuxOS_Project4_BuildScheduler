@@ -42,24 +42,30 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	int min_weight_cpu;
 	struct rq *rq_min_cpu;
 	
-	for_each_possible_cpu(i) {
-		struct rq *rq_cpu;
-		rq_cpu = cpu_rq(i);
+	if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
+		rq->wfq.load.weight += p->wfq_weight_change;
+	}
+	else {
+		for_each_possible_cpu(i) {
+			struct rq *rq_cpu;
+			rq_cpu = cpu_rq(i);
 		
-		if (min_weight > rq_cpu->wfq.load.weight) {
-			min_weight_cpu = i;
-			min_weight = rq_cpu->wfq.load.weight;
+			if (min_weight > rq_cpu->wfq.load.weight) {
+				min_weight_cpu = i;
+				min_weight = rq_cpu->wfq.load.weight;
+			}
 		}
+	
+		rq_min_cpu = cpu_rq(min_weight_cpu);
+	
+		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
+		(rq_min_cpu->wfq.nr_running)++;
+		add_nr_running(rq_min_cpu, 1);
+		p->wfq_vruntime = 0;
+		p->wfq_weight.weight = 10;
+		rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
 	}
 	
-	rq_min_cpu = cpu_rq(min_weight_cpu);
-	
-	list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
-	(rq_min_cpu->wfq.nr_running)++;
-	add_nr_running(rq_min_cpu, 1);
-	p->wfq_vruntime = 0;
-	p->wfq_weight.weight = 10;
-	rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
 	list_sort(NULL, &rq_min_cpu->wfq.wfq_rq_list, wfq_cmp);
 	
 	if (rq_min_cpu->wfq.max_weight < p->wfq_weight.weight) {

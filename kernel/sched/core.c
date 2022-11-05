@@ -8557,7 +8557,9 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 	if (task_pid_vnr(current) < 0)
 		return -EPERM;
 
+	current->wfq_weight_change = weight - (current->wfq_weight.weight);
 	current->wfq_weight.weight = weight;
+	
 	
 	if (current->sched_class != &wfq_sched_class)
 		return 0;
