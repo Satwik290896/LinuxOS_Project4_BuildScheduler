@@ -43,6 +43,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	struct rq *rq_min_cpu;
 	
 	if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
+		rq_min_cpu = rq;
 		rq->wfq.load.weight += p->wfq_weight_change;
 	}
 	else {
@@ -70,7 +71,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	
 	if (rq_min_cpu->wfq.max_weight < p->wfq_weight.weight) {
 		struct task_struct *first;
-		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+		first = list_first_entry(&rq_min_cpu->wfq.wfq_rq_list, struct task_struct, wfq);
 		rq_min_cpu->wfq.max_weight = first->wfq_weight.weight;
 	}
 }
