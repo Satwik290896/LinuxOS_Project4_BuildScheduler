@@ -8547,10 +8547,12 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	struct rq *rq;
 
-	if (!capable(CAP_SYS_ADMIN))
-		return -EACCES;
 	if (weight < 1)
 		return -EINVAL;
+	else if (weight > 10) {
+		if (!capable(CAP_SYS_ADMIN))
+			return -EACCES;
+	}
 
 	if (task_pid_vnr(current) < 0)
 		return -EPERM;
