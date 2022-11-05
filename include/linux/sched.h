@@ -645,11 +645,11 @@ struct wake_q_node {
 	struct wake_q_node *next;
 };
 
-#define MAX_CPUS 8 /* We will be testing only on the VMs */
+#define MAX_CPUS_WFQ_INFO 8 /* We will be testing only on the VMs */
 struct wfq_info {
 	int num_cpus;
-	int nr_running[MAX_CPUS];
-	int total_weight[MAX_CPUS];
+	int nr_running[MAX_CPUS_WFQ_INFO];
+	int total_weight[MAX_CPUS_WFQ_INFO];
 };
 
 struct task_struct {

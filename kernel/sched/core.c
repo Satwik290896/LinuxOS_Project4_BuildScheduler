@@ -8498,12 +8498,49 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
         trace_sched_update_nr_running_tp(rq, count);
 }
 
-
+/* This system call will fill the buffer with the required values 
+ * i.e. the total number of CPUs, the number of WFQ processes on each 
+ * CPU and the total weight of WFQ processes on each CPU. 
+ * Return value will also be the total number of CPUs.
+ * System call number 441
+ */ 
 SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
-	 return 0;
+	if (!wfq_info_struct)
+		return -EINVAL;
+
+	struct wfq_info *wfq_info_buf;
+	int ret = 0;
+	int i;
+	wfq_info_buf = kmalloc(sizeof(struct wfq_info), GFP_KERNEL);
+	wfq_info_buf->num_cpus = 0;
+	for_each_possible_cpu(i) {
+		if (wfq_info_buf->num_cpus < MAX_CPUS_WFQ_INFO) {
+			struct rq *rq_cpu;
+			rq_cpu = cpu_rq(i);
+			wfq_info_buf->nr_running[wfq_info_buf->num_cpus] = rq_cpu->wfq.nr_running;
+			wfq_info_buf->total_weight[wfq_info_buf->num_cpus] = rq_cpu->wfq.load.weight;
+		}
+		(wfq_info_buf->num_cpus)++;
+	}
+	
+	if(copy_to_user(wfq_info_struct, wfq_info_buf, sizeof(struct wfq_info))) {
+		kfree(wfq_info_buf);
+		return -EFAULT;
+	}
+
+	ret = wfq_info_buf->num_cpus;
+	kfree(wfq_info_buf);
+
+	return ret;
 }
 
+/* This system call will change the weight for the calling process.
+ * Only a root user should be able to increase the weight beyond
+ * the default value of 10.  The system call should return an error
+ * for any weight less than 1. 
+ * System call number 442.
+ */ 
 SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	 return 0;
