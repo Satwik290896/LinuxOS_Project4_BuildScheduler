@@ -46,12 +46,20 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	
 	if (p->sched_class != &wfq_sched_class)
 		return;	
-		
-	if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
+
+	if (flags & ENQUEUE_WFQ_ADD_EXACT) {
+		/* add p to this rq, rather than the rq with lowest total weight */
+		rq_min_cpu = rq;
+
+		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
+		(rq_min_cpu->wfq.nr_running)++;
+		add_nr_running(rq_min_cpu, 1);
+
+		rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
+	} else if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
 		rq_min_cpu = rq;
 		rq->wfq.load.weight += p->wfq_weight_change;
-	}
-	else {
+	} else {
 		for_each_possible_cpu(i) {
 			struct rq *rq_cpu;
 			rq_cpu = cpu_rq(i);
@@ -101,7 +109,7 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	
 	if (p->sched_class != &wfq_sched_class)
 		return;	
-		
+
 	list_del(&p->wfq);
 	(rq->wfq.nr_running)--;
 	sub_nr_running(rq, 1);
@@ -200,38 +208,69 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 {
 	unsigned long max_weight = 0;
 	int i;
+	int this_cpu_idx = 0;
 	int max_cpu_idx = 0;
 	int found_swappable_rq = 0;
 	struct rq *max_rq;
+	struct rq_flags rf_max;
+	int found_eligible = 0;
+	struct task_struct *curr;
+	struct task_struct *stolen_task;
+
+	if (p->sched_class != &wfq_sched_class)
+		return 1;
 
 	if (rq->wfq.nr_running != 0)
 		return 1;
 
 	/* find the CPU with greatest total weight */
 	for_each_possible_cpu(i) {
+		struct rq_flags rf_tmp;
 		struct rq *rq_cpu = cpu_rq(i);
-		if (rq_cpu == rq)
-			break;
+		if (rq_cpu == rq) {
+			this_cpu_idx = i;
+			continue;
+		}
 
-		rq_lock(rq_cpu, rf);
+		rq_lock(rq_cpu, &rf_tmp);
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
 			max_cpu_idx = i;
 			max_weight = rq_cpu->wfq.load.weight;
 			max_rq = rq_cpu;
 		}
-		rq_unlock(rq_cpu, rf);
+		rq_unlock(rq_cpu, &rf_tmp);
 	}
 
 	/* no CPUs with greater weight and at least 2 tasks */
 	if (found_swappable_rq == 0)
 		return 1;
 
-	/* TODO: pick an eligible task to steal */
+	rq_lock(max_rq, &rf_max);
+	/* iterate over max_rq to get an eligible task */
+	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
+		if (curr->sched_class != &wfq_sched_class)
+			continue;
+		if (kthread_is_per_cpu(curr))
+			continue;
+		if (!cpumask_test_cpu(this_cpu_idx, curr->cpus_ptr))
+			continue;
+		if (task_running(max_rq, curr))
+			continue;
 
-	/* TODO: do the steal! */
-	// this will be a common function we can use in both periodic and idle balancing
-	// move_task_between_cpus(...);
+		stolen_task = curr;
+		found_eligible = 1;
+		break;
+	}
+
+	if (found_eligible == 0) {
+		rq_unlock(max_rq, &rf_max);
+		return 1;
+	}
+
+	dequeue_task_wfq(max_rq, stolen_task, 0);
+	rq_unlock(max_rq, &rf_max);
+	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 
 	return 0;
 }
