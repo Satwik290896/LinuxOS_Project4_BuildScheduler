@@ -195,12 +195,44 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
-#ifdef CONFIG_SMP
+/* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
-	return 1;
+	unsigned long max_weight = 0;
+	int i;
+	int max_cpu_idx = 0;
+	int found_swappable_rq = 0;
+	struct rq *max_rq;
+
+	if (rq->wfq.nr_running != 0)
+		return 1;
+
+	/* find the CPU with greatest total weight */
+	for_each_possible_cpu(i) {
+		struct rq *rq_cpu = cpu_rq(i);
+		if (rq_cpu == rq)
+			break;
+
+		rq_lock(rq_cpu, &rf);
+		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
+			found_swappable_rq = 1;
+			max_cpu_idx = i;
+			max_weight = rq_cpu->wfq.load.weight;
+			max_rq = rq_cpu;
+		}
+		rq_unlock(rq_cpu, &rf);
+	}
+
+	/* no CPUs with greater weight and at least 2 tasks */
+	if (found_swappable_rq == 0)
+		return 1;
+
+	/* TODO: do the swap! */
+
+	return 0;
 }
 
+#ifdef CONFIG_SMP
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
@@ -241,10 +273,9 @@ const struct sched_class wfq_sched_class
 	.pick_next_task		= pick_next_task_wfq,
 	.put_prev_task		= put_prev_task_wfq,
 	.set_next_task          = set_next_task_wfq,
-
+	.balance		= balance_wfq,
 
 #ifdef CONFIG_SMP
-	.balance		= balance_wfq,
 	.select_task_rq		= select_task_rq_wfq,
 	.set_cpus_allowed       = set_cpus_allowed_common,
 	.rq_online              = rq_online_wfq,
