@@ -213,14 +213,14 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 		if (rq_cpu == rq)
 			break;
 
-		rq_lock(rq_cpu, &rf);
+		rq_lock(rq_cpu, rf);
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
 			max_cpu_idx = i;
 			max_weight = rq_cpu->wfq.load.weight;
 			max_rq = rq_cpu;
 		}
-		rq_unlock(rq_cpu, &rf);
+		rq_unlock(rq_cpu, rf);
 	}
 
 	/* no CPUs with greater weight and at least 2 tasks */
