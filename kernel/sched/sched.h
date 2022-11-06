@@ -1910,8 +1910,8 @@ extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
-extern const struct sched_class idle_sched_class;
 extern const struct sched_class wfq_sched_class;
+extern const struct sched_class idle_sched_class;
 
 static inline bool sched_stop_runnable(struct rq *rq)
 {

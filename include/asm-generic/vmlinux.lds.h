@@ -128,9 +128,9 @@
 #define SCHED_DATA				\
 	STRUCT_ALIGN();				\
 	__begin_sched_classes = .;		\
-	*(__wfq_sched_class)			\
 	*(__idle_sched_class)			\
 	*(__fair_sched_class)			\
+	*(__wfq_sched_class)			\
 	*(__rt_sched_class)			\
 	*(__dl_sched_class)			\
 	*(__stop_sched_class)			\
