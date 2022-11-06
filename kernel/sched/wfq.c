@@ -227,7 +227,11 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	if (found_swappable_rq == 0)
 		return 1;
 
-	/* TODO: do the swap! */
+	/* TODO: pick an eligible task to steal */
+
+	/* TODO: do the steal! */
+	// this will be a common function we can use in both periodic and idle balancing
+	// move_task_between_cpus(...);
 
 	return 0;
 }
