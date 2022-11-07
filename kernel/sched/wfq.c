@@ -3,6 +3,7 @@
 #include "pelt.h"
 #include "linux/list_sort.h"
 #include "linux/math64.h"
+#include <limits.h>
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 
@@ -211,13 +212,29 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+/*
+ * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
+ */
+void trigger_load_balance(struct rq *rq)
+{
+	/* Don't need to rebalance while attached to NULL domain */
+	if (unlikely(on_null_domain(rq)))
+		return;
 
-static int periodic_balance_wfq(struct task_struct *p)
+	if (time_after_eq(jiffies, rq->next_balance))
+		raise_softirq(SCHED_SOFTIRQ);
+
+	nohz_balancer_kick(rq);
+}
+
+static int load_balance_wfq(struct task_struct *p)
 {
 	struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
 	int i;
-	unsigned long max_weight = 0, min_weight = ;
+	unsigned long max_weight = 0, min_weight = ULONG_MAX;
+	struct task_struct *curr, *stolen_task;
+	int found_eligible = 0;
 
 	/* find the CPU with greatest total weight */
 	for_each_possible_cpu(i) {
@@ -237,10 +254,30 @@ static int periodic_balance_wfq(struct task_struct *p)
 		if (!max_weight)
 			return 1;
 
-		rq_lock_irq(rq, &rf);
-		list_for_each_entry();
+		rq_lock_irq(max_rq, &max_rq);
+		/* iterate over max_rq to get an eligible task */
+		list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
+			if (curr->sched_class != &wfq_sched_class)
+				continue;
+			if (kthread_is_per_cpu(curr))
+				continue;
+			if (!cpumask_test_cpu(this_cpu_idx, curr->cpus_ptr))
+				continue;
+			if (task_running(max_rq, curr))
+				continue;
+
+			stolen_task = curr;
+			found_eligible = 1;
+			break;
+		}
+		if(!found_eligible){
+			rq_unlock_irq(max_rq, &max_rq);
+			return 1;
+		}
 		rq_unlock_irq(rq, &rf);
 	}
+
+
 }
 
 /* idle load balancing implementation */
