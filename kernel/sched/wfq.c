@@ -215,21 +215,30 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 static int periodic_balance_wfq(struct task_struct *p)
 {
 	struct rq_flags rf;
-	struct rq *rq;
+	struct rq *rq, *max_rq, *min_rq;
 	int i;
-	unsigned long max_weight = 0;
+	unsigned long max_weight = 0, min_weight = ;
 
 	/* find the CPU with greatest total weight */
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
 		
 		rq_lock_irq(rq, &rf);
-		if ((rq->wfq.load->weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
-			found_swappable_rq = 1;
-			max_cpu_idx = i;
-			max_weight = rq_cpu->wfq.load.weight;
-			max_rq = rq_cpu;
+		if ((rq->wfq.load->weight > max_weight) && (rq->wfq.nr_running >= 2)) {
+			max_weight = rq->wfq.load.weight;
+			max_rq = rq;
 		}
+		if ((rq->wfq.load->weight < min_weight) && (rq->wfq.nr_running >= 2)) {
+			min_weight = rq->wfq.load.weight;
+			min_rq = rq;
+		}
+		rq_unlock_irq(rq, &rf);
+
+		if (!max_weight)
+			return 1;
+
+		rq_lock_irq(rq, &rf);
+		list_for_each_entry();
 		rq_unlock_irq(rq, &rf);
 	}
 }
