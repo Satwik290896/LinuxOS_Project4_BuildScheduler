@@ -211,6 +211,7 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+#ifdef CONFIG_SMP
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
@@ -283,7 +284,6 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	return 0;
 }
 
-#ifdef CONFIG_SMP
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
@@ -324,9 +324,9 @@ const struct sched_class wfq_sched_class
 	.pick_next_task		= pick_next_task_wfq,
 	.put_prev_task		= put_prev_task_wfq,
 	.set_next_task          = set_next_task_wfq,
-	.balance		= balance_wfq,
 
 #ifdef CONFIG_SMP
+	.balance		= balance_wfq,
 	.select_task_rq		= select_task_rq_wfq,
 	.set_cpus_allowed       = set_cpus_allowed_common,
 	.rq_online              = rq_online_wfq,
