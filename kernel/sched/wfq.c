@@ -43,9 +43,6 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	u64 min_weight = MAX_WEIGHT_WFQ;
 	int min_weight_cpu;
 	struct rq *rq_min_cpu;
-
-	printk(KERN_WARNING "[HERE] WFQ_ENQUEUE: pid: %u\n",
-		p->pid);
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
@@ -110,8 +107,6 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct task_struct *first;
 	
-	printk(KERN_WARNING "[HERE] WFQ_DEQUEUE: pid: %u\n",
-		p->pid);
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
@@ -150,7 +145,6 @@ static struct task_struct *pick_next_task_wfq(struct rq *rq)
 {
 	struct task_struct *p;
 	
-	printk(KERN_WARNING "[HERE] WFQ_PICK_NEXT_TASK \n");
 		
 	if (rq->wfq.nr_running < 1)
 		return NULL;
