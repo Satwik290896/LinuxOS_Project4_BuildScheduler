@@ -6,7 +6,7 @@
 #include <limits.h>
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
-unsigned long load_balance_counter;
+unsigned long next_balance_counter;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -216,21 +216,19 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 /*
  * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
  */
-void trigger_load_balance_wfq(struct rq *rq)
+void trigger_load_balance_wfq()
 {
-	unsigned long interval = 500;
-	/* Don't need to rebalance while attached to NULL domain */
-	if (unlikely(on_null_domain(rq)))
-		return;
-
-	if (time_after_eq(jiffies, rq->next_balance))
+	unsigned long interval = msecs_to_jiffies(500);
+	if(!next_balance_counter)
+		next_balance_counter = jiffies;
+	if(time_after_eq(jiffies, next_balance_counter))
 		raise_softirq(SCHED_SOFTIRQ);
-
-
-	nohz_balancer_kick(rq);
+	load_balance_wfq();
+	// nohz_balancer_kick(rq);
+	next_balance_counter += interval;
 }
 
-static int load_balance_wfq(struct task_struct *p)
+static int load_balance_wfq()
 {
 	struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
@@ -277,6 +275,7 @@ static int load_balance_wfq(struct task_struct *p)
 			rq_unlock_irq(max_rq, &rf);
 			return 1;
 		}
+		/* add the stolen_task to rq with the lowest weight */
 		dequeue_task_wfq(max_rq, stolen_task, 0);
 		rq_unlock(max_rq, &rf);
 		enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
