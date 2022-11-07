@@ -6,6 +6,7 @@
 #include <limits.h>
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
+unsigned long load_balance_counter;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -215,14 +216,16 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 /*
  * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
  */
-void trigger_load_balance(struct rq *rq)
+void trigger_load_balance_wfq(struct rq *rq)
 {
+	unsigned long interval = 500;
 	/* Don't need to rebalance while attached to NULL domain */
 	if (unlikely(on_null_domain(rq)))
 		return;
 
 	if (time_after_eq(jiffies, rq->next_balance))
 		raise_softirq(SCHED_SOFTIRQ);
+
 
 	nohz_balancer_kick(rq);
 }
@@ -232,9 +235,9 @@ static int load_balance_wfq(struct task_struct *p)
 	struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
 	int i;
-	unsigned long max_weight = 0, min_weight = ULONG_MAX;
+	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
 	struct task_struct *curr, *stolen_task;
-	int found_eligible = 0;
+	int found_eligible = 0, this_cpu_idx = 0;
 
 	/* find the CPU with greatest total weight */
 	for_each_possible_cpu(i) {
@@ -254,7 +257,7 @@ static int load_balance_wfq(struct task_struct *p)
 		if (!max_weight)
 			return 1;
 
-		rq_lock_irq(max_rq, &max_rq);
+		rq_lock_irq(max_rq, &rf);
 		/* iterate over max_rq to get an eligible task */
 		list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 			if (curr->sched_class != &wfq_sched_class)
@@ -271,13 +274,14 @@ static int load_balance_wfq(struct task_struct *p)
 			break;
 		}
 		if(!found_eligible){
-			rq_unlock_irq(max_rq, &max_rq);
+			rq_unlock_irq(max_rq, &rf);
 			return 1;
 		}
-		rq_unlock_irq(rq, &rf);
+		dequeue_task_wfq(max_rq, stolen_task, 0);
+		rq_unlock(max_rq, &rf);
+		enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	}
-
-
+	return 0;
 }
 
 /* idle load balancing implementation */
