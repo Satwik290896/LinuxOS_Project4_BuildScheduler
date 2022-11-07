@@ -1819,7 +1819,7 @@ extern const u32		sched_prio_to_wmult[40];
 #define ENQUEUE_MIGRATED	0x00
 #endif
 #define ENQUEUE_WFQ_WEIGHT_UPD	0x80
-#define ENQUEUE_WFQ_ADD_EXACT   0x01
+#define ENQUEUE_WFQ_ADD_EXACT   0x100
 
 #define RETRY_TASK		((void *)-1UL)
 
