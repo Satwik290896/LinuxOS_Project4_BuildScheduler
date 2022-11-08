@@ -221,6 +221,7 @@ void trigger_load_balance_wfq()
 	unsigned long interval = msecs_to_jiffies(500);
 	if(!next_balance_counter)
 		next_balance_counter = jiffies;
+	prink("next_balance_counter: %lu\n", next_balance_counter);
 	if(time_after_eq(jiffies, next_balance_counter))
 		raise_softirq(SCHED_SOFTIRQ);
 	load_balance_wfq();
