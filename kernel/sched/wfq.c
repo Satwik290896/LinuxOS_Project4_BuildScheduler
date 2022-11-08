@@ -277,6 +277,7 @@ void trigger_load_balance_wfq(void)
 	next_balance_counter += interval;
 }
 
+#ifdef CONFIG_SMP
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
