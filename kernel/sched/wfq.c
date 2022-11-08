@@ -269,7 +269,7 @@ void trigger_load_balance_wfq(void)
 	unsigned long interval = msecs_to_jiffies(500);
 	if(!next_balance_counter)
 		next_balance_counter = jiffies;
-	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
+	printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
 	if(time_after_eq(jiffies, next_balance_counter))
 		raise_softirq(SCHED_SOFTIRQ);
 	load_balance_wfq();
@@ -277,6 +277,7 @@ void trigger_load_balance_wfq(void)
 	next_balance_counter += interval;
 }
 
+#ifdef CONFIG_SMP
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
