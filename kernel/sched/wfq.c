@@ -3,7 +3,6 @@
 #include "pelt.h"
 #include "linux/list_sort.h"
 #include "linux/math64.h"
-#include <limits.h>
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 unsigned long next_balance_counter;
@@ -213,23 +212,7 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
-/*
- * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
- */
-void trigger_load_balance_wfq()
-{
-	unsigned long interval = msecs_to_jiffies(500);
-	if(!next_balance_counter)
-		next_balance_counter = jiffies;
-	prink("next_balance_counter: %lu\n", next_balance_counter);
-	if(time_after_eq(jiffies, next_balance_counter))
-		raise_softirq(SCHED_SOFTIRQ);
-	load_balance_wfq();
-	// nohz_balancer_kick(rq);
-	next_balance_counter += interval;
-}
-
-static int load_balance_wfq()
+static int load_balance_wfq(void)
 {
 	struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
@@ -243,11 +226,11 @@ static int load_balance_wfq()
 		rq = cpu_rq(i);
 		
 		rq_lock_irq(rq, &rf);
-		if ((rq->wfq.load->weight > max_weight) && (rq->wfq.nr_running >= 2)) {
+		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
 			max_weight = rq->wfq.load.weight;
 			max_rq = rq;
 		}
-		if ((rq->wfq.load->weight < min_weight) && (rq->wfq.nr_running >= 2)) {
+		if ((rq->wfq.load.weight < min_weight) && (rq->wfq.nr_running >= 2)) {
 			min_weight = rq->wfq.load.weight;
 			min_rq = rq;
 		}
@@ -282,6 +265,22 @@ static int load_balance_wfq()
 		enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	}
 	return 0;
+}
+
+/*
+ * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
+ */
+void trigger_load_balance_wfq(void)
+{
+	unsigned long interval = msecs_to_jiffies(500);
+	if(!next_balance_counter)
+		next_balance_counter = jiffies;
+	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
+	if(time_after_eq(jiffies, next_balance_counter))
+		raise_softirq(SCHED_SOFTIRQ);
+	load_balance_wfq();
+	// nohz_balancer_kick(rq);
+	next_balance_counter += interval;
 }
 
 /* idle load balancing implementation */
