@@ -215,11 +215,11 @@ static int load_balance_wfq(void)
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 
-	/* find the CPU with greatest total weight */
+	/* find the CPU with largest and smallest total weight */
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
 		
-		rq_lock_irq(rq, &rf);
+		rq_lock(rq, &rf);
 		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
 			max_weight = rq->wfq.load.weight;
 			max_rq = rq;
@@ -228,36 +228,35 @@ static int load_balance_wfq(void)
 			min_weight = rq->wfq.load.weight;
 			min_rq = rq;
 		}
-		rq_unlock_irq(rq, &rf);
-
-		if (!max_weight)
-			return 1;
-
-		rq_lock_irq(max_rq, &rf);
-		/* iterate over max_rq to get an eligible task */
-		list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
-			if (curr->sched_class != &wfq_sched_class)
-				continue;
-			if (kthread_is_per_cpu(curr))
-				continue;
-			if (!cpumask_test_cpu(this_cpu_idx, curr->cpus_ptr))
-				continue;
-			if (task_running(max_rq, curr))
-				continue;
-
-			stolen_task = curr;
-			found_eligible = 1;
-			break;
-		}
-		if(!found_eligible){
-			rq_unlock_irq(max_rq, &rf);
-			return 1;
-		}
-		/* add the stolen_task to rq with the lowest weight */
-		dequeue_task_wfq(max_rq, stolen_task, 0);
-		rq_unlock(max_rq, &rf);
-		enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+		rq_unlock(rq, &rf);
 	}
+	if (!max_weight)
+		return 1;
+
+	rq_lock(max_rq, &rf);
+	/* iterate over max_rq to get an eligible task */
+	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
+		if (curr->sched_class != &wfq_sched_class)
+			continue;
+		if (kthread_is_per_cpu(curr))
+			continue;
+		if (!cpumask_test_cpu(this_cpu_idx, curr->cpus_ptr))
+			continue;
+		if (task_running(max_rq, curr))
+			continue;
+
+		stolen_task = curr;
+		found_eligible = 1;
+		break;
+	}
+	if(!found_eligible){
+		rq_unlock(max_rq, &rf);
+		return 1;
+	}
+	/* add the stolen_task to rq with the lowest weight */
+	dequeue_task_wfq(max_rq, stolen_task, 0);
+	rq_unlock(max_rq, &rf);
+	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	return 0;
 }
 
@@ -269,7 +268,7 @@ void trigger_load_balance_wfq(void)
 	unsigned long interval = msecs_to_jiffies(500);
 	if(!next_balance_counter)
 		next_balance_counter = jiffies;
-	printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
+	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
 	if(time_after_eq(jiffies, next_balance_counter))
 		raise_softirq(SCHED_SOFTIRQ);
 	load_balance_wfq();
