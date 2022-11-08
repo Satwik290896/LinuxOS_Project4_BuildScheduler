@@ -39,10 +39,6 @@ static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	
-	int i;
-	struct rq_flags rf;
-	u64 min_weight = MAX_WEIGHT_WFQ;
-	int min_weight_cpu;
 	struct rq *rq_min_cpu;
 		
 	if (p->sched_class != &wfq_sched_class)
@@ -61,26 +57,9 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq_min_cpu = rq;
 		rq->wfq.load.weight += p->wfq_weight_change;
 	} else {
-		for_each_possible_cpu(i) {
-			struct rq *rq_cpu;
-			rq_cpu = cpu_rq(i);
-			
-			if (rq_cpu != rq)
-				rq_lock(rq_cpu, &rf);
+
 	
-			if (min_weight > rq_cpu->wfq.load.weight) {
-				min_weight_cpu = i;
-				min_weight = rq_cpu->wfq.load.weight;
-			}
-			
-			if (rq_cpu != rq)
-				rq_unlock(rq_cpu, &rf);
-		}
-	
-		rq_min_cpu = cpu_rq(min_weight_cpu);
-	
-		if (rq_min_cpu != rq)
-			rq_lock(rq_min_cpu, &rf);
+		rq_min_cpu = rq;
 			
 		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
 		(rq_min_cpu->wfq.nr_running)++;
@@ -97,8 +76,6 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq_min_cpu->wfq.max_weight = first->wfq_weight.weight;
 	}
 	
-	if (rq_min_cpu != rq)
-		rq_unlock(rq_min_cpu, &rf);
 }
 
 
@@ -353,7 +330,25 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
-	return cpu;
+	int i;
+	struct rq_flags rf;
+	u64 min_weight = MAX_WEIGHT_WFQ;
+	int min_weight_cpu = cpu;
+	struct rq *rq_cpu;
+	
+	for_each_possible_cpu(i) {
+		
+		rq_cpu = cpu_rq(i);
+		rq_lock(rq_cpu, &rf);
+
+		if (min_weight > rq_cpu->wfq.load.weight) {
+			min_weight_cpu = i;
+			min_weight = rq_cpu->wfq.load.weight;
+		}
+
+		rq_unlock(rq_cpu, &rf);
+	}
+	return min_weight_cpu;
 }
 
 static void rq_online_wfq(struct rq *rq)
