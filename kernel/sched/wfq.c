@@ -44,9 +44,6 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	u64 min_weight = MAX_WEIGHT_WFQ;
 	int min_weight_cpu;
 	struct rq *rq_min_cpu;
-
-	printk(KERN_WARNING "[HERE] WFQ_ENQUEUE: pid: %u\n",
-		p->pid);
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
@@ -111,8 +108,6 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct task_struct *first;
 	
-	printk(KERN_WARNING "[HERE] WFQ_DEQUEUE: pid: %u\n",
-		p->pid);
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
@@ -151,7 +146,6 @@ static struct task_struct *pick_next_task_wfq(struct rq *rq)
 {
 	struct task_struct *p;
 	
-	printk(KERN_WARNING "[HERE] WFQ_PICK_NEXT_TASK \n");
 		
 	if (rq->wfq.nr_running < 1)
 		return NULL;
@@ -355,7 +349,6 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	return 0;
 }
 
-#ifdef CONFIG_SMP
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
@@ -396,9 +389,9 @@ const struct sched_class wfq_sched_class
 	.pick_next_task		= pick_next_task_wfq,
 	.put_prev_task		= put_prev_task_wfq,
 	.set_next_task          = set_next_task_wfq,
-	.balance		= balance_wfq,
 
 #ifdef CONFIG_SMP
+	.balance		= balance_wfq,
 	.select_task_rq		= select_task_rq_wfq,
 	.set_cpus_allowed       = set_cpus_allowed_common,
 	.rq_online              = rq_online_wfq,
