@@ -316,21 +316,24 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	/* find the CPU with greatest total weight */
 	for_each_possible_cpu(i) {
-		struct rq_flags rf_tmp;
+		/* struct rq_flags rf_tmp; */
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
 			this_cpu_idx = i;
 			continue;
 		}
 
-		rq_lock(rq_cpu, &rf_tmp);
+		/* since the spec says that the weights used here can
+		 * be an estimate, and we're not modifying the RQ in
+		 * this step, we can do this without using a lock. */
+		/* rq_lock(rq_cpu, &rf_tmp); */
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
 			max_cpu_idx = i;
 			max_weight = rq_cpu->wfq.load.weight;
 			max_rq = rq_cpu;
 		}
-		rq_unlock(rq_cpu, &rf_tmp);
+		/* rq_unlock(rq_cpu, &rf_tmp); */
 	}
 
 	/* no CPUs with greater weight and at least 2 tasks */
