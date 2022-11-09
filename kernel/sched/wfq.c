@@ -9,7 +9,7 @@
 #define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
 #define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
-atomic_t next_balance_counter;
+atomic_t next_balance_counter = ATOMIC_INIT(0);
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -308,7 +308,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	}
 	if(!found_eligible){
 		rq_unlock(max_rq, &rf);
-		return 1;
+		return;
 	}
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
@@ -325,10 +325,10 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 void trigger_load_balance_wfq(struct rq *rq)
 {
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
-	if(next_balance_counter == NULL)
+	if(!atomic_read(&next_balance_counter))
 		atomic_set(&next_balance_counter, next_balance);
 	/* printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter); */
-	if(time_after_eq(jiffies, next_balance_counter)){
+	if(time_after_eq(jiffies, atomic_read(&next_balance_counter))){
 		atomic_set(&next_balance_counter, next_balance);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
 	}
