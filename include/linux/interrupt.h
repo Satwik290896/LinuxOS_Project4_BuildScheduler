@@ -534,6 +534,7 @@ enum
 	BLOCK_SOFTIRQ,
 	IRQ_POLL_SOFTIRQ,
 	TASKLET_SOFTIRQ,
+	SCHED_WFQ_SOFTIRQ,
 	SCHED_SOFTIRQ,
 	HRTIMER_SOFTIRQ,
 	RCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */
