@@ -9,7 +9,7 @@
 #define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
 #define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
-atomic_long_t next_balance_counter;
+unsigned long next_balance_counter;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -260,7 +260,7 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
-static int load_balance_wfq(void)
+static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 {
 	struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
@@ -325,12 +325,12 @@ static int load_balance_wfq(void)
  */
 void trigger_load_balance_wfq(struct rq *rq)
 {
-	unsigned long next_balance = jiffies + msecs_to_jiffies(500);
+	unsigned long interval = msecs_to_jiffies(500); 
 	if(!next_balance_counter)
-		atomic_long_set(&next_balance_counter, next_balance);
+		next_balance_counter = jiffies + interval;
 	/* printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter); */
 	if(time_after_eq(jiffies, next_balance_counter)){
-		atomic_long_set(&next_balance_counter, next_balance);
+		atomic_long_add(&next_balance_counter, interval);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
 	}
 }
