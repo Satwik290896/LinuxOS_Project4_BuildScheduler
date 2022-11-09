@@ -9,7 +9,7 @@
 #define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
 #define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
-unsigned long next_balance_counter;
+atomic_long_t next_balance_counter;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -268,21 +268,24 @@ static int load_balance_wfq(void)
 	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
+	int min_cpu, max_cpu;
 
 	/* find the CPU with largest and smallest total weight */
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
 		
-		// rq_lock(rq, &rf);
+		/* rq_lock(rq, &rf); */
 		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
 			max_weight = rq->wfq.load.weight;
 			max_rq = rq;
+			max_cpu = i;
 		}
 		if ((rq->wfq.load.weight < min_weight) && (rq->wfq.nr_running >= 2)) {
 			min_weight = rq->wfq.load.weight;
 			min_rq = rq;
+			min_cpu = i;
 		}
-		// rq_unlock(rq, &rf);
+		/* rq_unlock(rq, &rf); */
 	}
 	if (!max_weight)
 		return 1;
@@ -310,7 +313,7 @@ static int load_balance_wfq(void)
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf);
-
+	printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
 	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	rq_unlock(min_rq, &rf);
@@ -325,7 +328,7 @@ void trigger_load_balance_wfq(struct rq *rq)
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500);
 	if(!next_balance_counter)
 		atomic_long_set(&next_balance_counter, next_balance);
-	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
+	/* printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter); */
 	if(time_after_eq(jiffies, next_balance_counter)){
 		atomic_long_set(&next_balance_counter, next_balance);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
@@ -498,6 +501,6 @@ const struct sched_class wfq_sched_class
 __init void init_sched_wfq_class(void)
 {
 #ifdef CONFIG_SMP
-	open_softirq(SCHED_WFQ_SOFTIRQ, load_balance_wfq());
+	open_softirq(SCHED_WFQ_SOFTIRQ, load_balance_wfq);
 #endif /* SMP */
 }
