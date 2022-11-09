@@ -3,6 +3,7 @@
 #include "pelt.h"
 #include "linux/list_sort.h"
 #include "linux/math64.h"
+#include "linux/types.h"
 
 #define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
 unsigned long next_balance_counter;
@@ -196,7 +197,7 @@ static int load_balance_wfq(void)
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
 		
-		rq_lock(rq, &rf);
+		// rq_lock(rq, &rf);
 		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
 			max_weight = rq->wfq.load.weight;
 			max_rq = rq;
@@ -205,7 +206,7 @@ static int load_balance_wfq(void)
 			min_weight = rq->wfq.load.weight;
 			min_rq = rq;
 		}
-		rq_unlock(rq, &rf);
+		// rq_unlock(rq, &rf);
 	}
 	if (!max_weight)
 		return 1;
@@ -233,7 +234,7 @@ static int load_balance_wfq(void)
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf);
-	
+
 	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	rq_unlock(min_rq, &rf);
@@ -241,19 +242,18 @@ static int load_balance_wfq(void)
 }
 
 /*
- * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
+ * Trigger the SCHED_WFQ_SOFTIRQ if it is time to do periodic load balancing.
  */
-void trigger_load_balance_wfq(void)
+void trigger_load_balance_wfq(struct rq *rq)
 {
-	unsigned long interval = msecs_to_jiffies(500);
+	unsigned long next_balance = jiffies + msecs_to_jiffies(500);
 	if(!next_balance_counter)
-		next_balance_counter = jiffies;
+		atomic_long_set(&next_balance_counter, next_balance);
 	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
-	if(time_after_eq(jiffies, next_balance_counter))
-		raise_softirq(SCHED_SOFTIRQ);
-	load_balance_wfq();
-	// nohz_balancer_kick(rq);
-	next_balance_counter += interval;
+	if(time_after_eq(jiffies, next_balance_counter)){
+		atomic_long_set(&next_balance_counter, next_balance);
+		raise_softirq(SCHED_WFQ_SOFTIRQ);
+	}
 }
 
 #ifdef CONFIG_SMP
@@ -418,3 +418,10 @@ const struct sched_class wfq_sched_class
 #endif
 
 };
+
+__init void init_sched_wfq_class(void)
+{
+#ifdef CONFIG_SMP
+	open_softirq(SCHED_WFQ_SOFTIRQ, load_balance_wfq());
+#endif /* SMP */
+}
