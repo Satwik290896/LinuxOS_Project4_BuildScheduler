@@ -288,7 +288,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		/* rq_unlock(rq, &rf); */
 	}
 	if (!max_weight)
-		return 1;
+		return;
 
 	rq_lock(max_rq, &rf);
 	/* iterate over max_rq to get an eligible task */
@@ -328,7 +328,7 @@ void trigger_load_balance_wfq(struct rq *rq)
 	if(!atomic_read(&next_balance_counter))
 		atomic_set(&next_balance_counter, next_balance);
 	/* printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter); */
-	if(time_after_eq(jiffies, atomic_read(&next_balance_counter))){
+	if(time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
 		atomic_set(&next_balance_counter, next_balance);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
 	}
