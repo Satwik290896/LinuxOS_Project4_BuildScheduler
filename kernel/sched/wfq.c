@@ -5,7 +5,10 @@
 #include "linux/math64.h"
 #include "linux/types.h"
 
-#define MAX_WEIGHT_WFQ 0xFFFFFFFFFFFFFFFF
+#define MAX_WEIGHT_WFQ	0xFFFFFFFFFFFFFFFF
+#define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
+#define MAX_VALUE	0xFFFFFFFFFFFFFFFF
+#define SCALING_FACTOR	0xFFFFFF
 unsigned long next_balance_counter;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
@@ -13,18 +16,24 @@ void init_wfq_rq(struct wfq_rq *wfq_rq)
 	wfq_rq->load.weight = 0;
 	INIT_LIST_HEAD(&wfq_rq->wfq_rq_list);
 	wfq_rq->rq_cpu_runtime = 0;
-	wfq_rq->max_weight = 0;
+	wfq_rq->max_weight = MIN_VFT_INIT;
 	wfq_rq->nr_running = 0;
+	wfq_rq->curr = NULL;
 }
 
+static u64 find_vft(struct task_struct *p) {
+	u64 p_vft = p->wfq_vruntime + (SCALING_FACTOR/(p->wfq_weight.weight));
+	
+	return p_vft;
+}
 static int wfq_cmp(void *priv, const struct list_head *a,
 					const struct list_head *b)
 {
 	struct task_struct *ra = list_entry(a, struct task_struct, wfq);
 	struct task_struct *rb = list_entry(b, struct task_struct, wfq);
 
-	u64	param1 = MAX_WEIGHT_WFQ/(ra->wfq_weight.weight);
-	u64	param2 = MAX_WEIGHT_WFQ/(rb->wfq_weight.weight);
+	u64	param1 = find_vft(ra);
+	u64	param2 = find_vft(rb);
 	s64	delta = (s64)(param1 - param2);
 	if (delta > 0)
 		return 1;
@@ -32,7 +41,22 @@ static int wfq_cmp(void *priv, const struct list_head *a,
 		return -1;
 	return 0;
 }
-					
+
+/*Name is confusing, update_max_weight updates the minimum VFT of this wfq_rq*/
+static bool 
+update_max_weight (struct rq *rq, struct task_struct *p)
+{
+	u64 p_vft = find_vft(p);
+	u64 min_vft = rq->wfq.max_weight;
+	bool upd_happened = false;
+	
+	if (min_vft > p_vft) {
+		rq->wfq.max_weight = p_vft;
+		upd_happened = true;
+	}
+	
+	return upd_happened;
+}			
 /*
  * Adding/removing a task to/from a priority array:
  */
@@ -40,42 +64,65 @@ static void
 enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	
-	struct rq *rq_min_cpu;
+	bool upd_happened = false;
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
 
 	if (flags & ENQUEUE_WFQ_ADD_EXACT) {
 		/* add p to this rq, rather than the rq with lowest total weight */
-		rq_min_cpu = rq;
 
-		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
-		(rq_min_cpu->wfq.nr_running)++;
-		add_nr_running(rq_min_cpu, 1);
+		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		
+		/*Doing this before incrementing*/
+		if (rq->wfq.nr_running >= 1)
+			upd_happened = update_max_weight(rq, p);
+		else {
+			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
 
-		rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
+		(rq->wfq.nr_running)++;
+		add_nr_running(rq, 1);
+
+		rq->wfq.load.weight += p->wfq_weight.weight;
+		
 	} else if (flags & ENQUEUE_WFQ_WEIGHT_UPD) {
-		rq_min_cpu = rq;
+	
 		rq->wfq.load.weight += p->wfq_weight_change;
+		
+		/*=1 means only *p is in queue; =0 will not happen*/
+		if (rq->wfq.nr_running == 1) {
+			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
+		else if (rq->wfq.nr_running > 1)
+			upd_happened = update_max_weight(rq, p);
 	} else {
 
-	
-		rq_min_cpu = rq;
-			
-		list_add_tail(&p->wfq, &rq_min_cpu->wfq.wfq_rq_list);
-		(rq_min_cpu->wfq.nr_running)++;
-		add_nr_running(rq_min_cpu, 1);
+		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		
+		/*Doing this before incrementing*/
+		if (rq->wfq.nr_running >= 1)
+			upd_happened = update_max_weight(rq, p);
+		else {
+			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
 
-		rq_min_cpu->wfq.load.weight += p->wfq_weight.weight;
+		(rq->wfq.nr_running)++;
+		add_nr_running(rq, 1);
+
+		rq->wfq.load.weight += p->wfq_weight.weight;
 	}
 	
-	list_sort(NULL, &rq_min_cpu->wfq.wfq_rq_list, wfq_cmp);
-	
-	if (rq_min_cpu->wfq.max_weight < p->wfq_weight.weight) {
-		struct task_struct *first;
-		first = list_first_entry(&rq_min_cpu->wfq.wfq_rq_list, struct task_struct, wfq);
-		rq_min_cpu->wfq.max_weight = first->wfq_weight.weight;
+	if (upd_happened) {
+		list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+		rq->wfq.curr = p;
 	}
+	
+	/* required
+	 * list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);*/
 	
 }
 
@@ -96,9 +143,15 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	
 	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
+	if (rq->wfq.nr_running >= 1) {
+		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+		rq->wfq.max_weight = find_vft(first);
+		rq->wfq.curr = first;
+	} else {
+		rq->wfq.max_weight = MIN_VFT_INIT;
+		rq->wfq.curr = NULL;
+	}
 	
-	first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-	rq->wfq.max_weight = first->wfq_weight.weight;
 }
 
 static void yield_task_wfq(struct rq *rq)
@@ -113,7 +166,7 @@ static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int fla
 {
 	if (p->sched_class != &wfq_sched_class)
 		return;	
-	if (rq->wfq.max_weight > p->wfq_weight.weight)
+	if (rq->wfq.max_weight < find_vft(p))
 	{
 		resched_curr(rq);
 	}
@@ -150,17 +203,40 @@ static void set_next_task_wfq(struct rq *rq, struct task_struct *next, bool firs
 
 static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 {
+	u64 new_vruntime_val;
+	u64 new_cpuruntime_val;
+	u64 diff;
+	u64 temp;
 	if (curr->sched_class != &wfq_sched_class)
 		return;
-		
+
+	if (rq->wfq.nr_running < 1)
+		return;
+
 	/*Ideally it should be (1/task_weight)*/
-	curr->wfq_vruntime += 1;
+	new_vruntime_val = (SCALING_FACTOR)/(curr->wfq_weight.weight);
+	diff = MAX_VALUE - curr->wfq_vruntime;
+	
+	if (diff > new_vruntime_val)
+		curr->wfq_vruntime += new_vruntime_val;
+	else {
+		temp = new_vruntime_val - diff;
+		curr->wfq_vruntime = temp;
+	}
 	
 	/*Ideally it should be (1/total_task_weight). 
 	 * We count it and wherever required divide */
-	rq->wfq.rq_cpu_runtime += 1;
+	new_cpuruntime_val = (SCALING_FACTOR)/(rq->wfq.load.weight);
+	diff = MAX_VALUE - rq->wfq.rq_cpu_runtime;
 	
-	if (rq->wfq.max_weight > curr->wfq_weight.weight)
+	if (diff > new_cpuruntime_val)
+		rq->wfq.rq_cpu_runtime += new_cpuruntime_val;
+	else {
+		temp = new_cpuruntime_val - diff;
+		rq->wfq.rq_cpu_runtime = temp;	
+	}	
+	
+	if (rq->wfq.max_weight < find_vft(curr))
 	{
 		resched_curr(rq);
 	}
