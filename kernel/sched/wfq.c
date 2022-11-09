@@ -233,7 +233,10 @@ static int load_balance_wfq(void)
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf);
+	
+	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+	rq_unlock(min_rq, &rf);
 	return 0;
 }
 
