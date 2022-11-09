@@ -6,6 +6,7 @@
 
 #define MAX_WEIGHT_WFQ	0xFFFFFFFFFFFFFFFF
 #define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
+#define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
 unsigned long next_balance_counter;
 
@@ -16,6 +17,7 @@ void init_wfq_rq(struct wfq_rq *wfq_rq)
 	wfq_rq->rq_cpu_runtime = 0;
 	wfq_rq->max_weight = MIN_VFT_INIT;
 	wfq_rq->nr_running = 0;
+	wfq_rq->curr = NULL;
 }
 
 static u64 find_vft(struct task_struct *p) {
@@ -74,8 +76,10 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
 			upd_happened = update_max_weight(rq, p);
-		else
+		else {
 			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
 
 		(rq->wfq.nr_running)++;
 		add_nr_running(rq, 1);
@@ -87,8 +91,10 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq->wfq.load.weight += p->wfq_weight_change;
 		
 		/*=1 means only *p is in queue; =0 will not happen*/
-		if (rq->wfq.nr_running == 1)
+		if (rq->wfq.nr_running == 1) {
 			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
 		else if (rq->wfq.nr_running > 1)
 			upd_happened = update_max_weight(rq, p);
 	} else {
@@ -98,8 +104,10 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
 			upd_happened = update_max_weight(rq, p);
-		else
+		else {
 			rq->wfq.max_weight = find_vft(p);
+			rq->wfq.curr = p;
+		}
 
 		(rq->wfq.nr_running)++;
 		add_nr_running(rq, 1);
@@ -107,10 +115,12 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq->wfq.load.weight += p->wfq_weight.weight;
 	}
 	
-	if (upd_happened) 
-		list_move(&p->wfq, &rq->wfq.wfq_rq_list);
+	if (upd_happened) {
+		list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+		rq->wfq.curr = p;
+	}
 	
-	/* Not required
+	/* required
 	 * list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);*/
 	
 }
@@ -132,9 +142,15 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	
 	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
+	if (rq->wfq.nr_running >= 1) {
+		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+		rq->wfq.max_weight = find_vft(first);
+		rq->wfq.curr = first;
+	} else {
+		rq->wfq.max_weight = MIN_VFT_INIT;
+		rq->wfq.curr = NULL;
+	}
 	
-	first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-	rq->wfq.max_weight = first->wfq_weight.weight;
 }
 
 static void yield_task_wfq(struct rq *rq)
@@ -149,7 +165,7 @@ static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int fla
 {
 	if (p->sched_class != &wfq_sched_class)
 		return;	
-	if (rq->wfq.max_weight > p->wfq_weight.weight)
+	if (rq->wfq.max_weight < find_vft(p))
 	{
 		resched_curr(rq);
 	}
@@ -186,6 +202,10 @@ static void set_next_task_wfq(struct rq *rq, struct task_struct *next, bool firs
 
 static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 {
+	u64 new_vruntime_val;
+	u64 new_cpuruntime_val;
+	u64 diff;
+	u64 temp;
 	if (curr->sched_class != &wfq_sched_class)
 		return;
 
@@ -193,13 +213,29 @@ static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 		return;
 
 	/*Ideally it should be (1/task_weight)*/
-	curr->wfq_vruntime += (SCALING_FACTOR)/(curr->wfq_weight.weight);
+	new_vruntime_val = (SCALING_FACTOR)/(curr->wfq_weight.weight);
+	diff = MAX_VALUE - curr->wfq_vruntime;
+	
+	if (diff > new_vruntime_val)
+		curr->wfq_vruntime += new_vruntime_val;
+	else {
+		temp = new_vruntime_val - diff;
+		curr->wfq_vruntime = temp;
+	}
 	
 	/*Ideally it should be (1/total_task_weight). 
 	 * We count it and wherever required divide */
-	rq->wfq.rq_cpu_runtime += (SCALING_FACTOR)/(rq->wfq.load.weight);
+	new_cpuruntime_val = (SCALING_FACTOR)/(rq->wfq.load.weight);
+	diff = MAX_VALUE - rq->wfq.rq_cpu_runtime;
 	
-	if (rq->wfq.max_weight > curr->wfq_weight.weight)
+	if (diff > new_cpuruntime_val)
+		rq->wfq.rq_cpu_runtime += new_cpuruntime_val;
+	else {
+		temp = new_cpuruntime_val - diff;
+		rq->wfq.rq_cpu_runtime = temp;	
+	}	
+	
+	if (rq->wfq.max_weight < find_vft(curr))
 	{
 		resched_curr(rq);
 	}
