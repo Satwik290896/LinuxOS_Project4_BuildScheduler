@@ -73,6 +73,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		/* add p to this rq, rather than the rq with lowest total weight */
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		p->wfq_vruntime = rq->wfq.rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
@@ -98,9 +99,12 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		}
 		else if (rq->wfq.nr_running > 1)
 			upd_happened = update_max_weight(rq, p);
+			
+		
 	} else {
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		p->wfq_vruntime = rq->wfq.rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
@@ -116,8 +120,8 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq->wfq.load.weight += p->wfq_weight.weight;
 	}
 	
+	//list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 	if (upd_happened) {
-		list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 		rq->wfq.curr = p;
 	}
 	
@@ -144,9 +148,12 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
 	if (rq->wfq.nr_running >= 1) {
-		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-		rq->wfq.max_weight = find_vft(first);
-		rq->wfq.curr = first;
+		if (p == rq->wfq.curr) {
+			list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+			first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+			rq->wfq.max_weight = find_vft(first);
+			rq->wfq.curr = first;
+		}
 	} else {
 		rq->wfq.max_weight = MIN_VFT_INIT;
 		rq->wfq.curr = NULL;
@@ -181,6 +188,8 @@ static struct task_struct *pick_next_task_wfq(struct rq *rq)
 	if (rq->wfq.nr_running < 1)
 		return NULL;
 
+	list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+	
 	p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
 	return p;
 }
@@ -270,6 +279,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
 	unsigned long flags;
+	
 	/* 	grab a lock
 		check condition
 		if true update next_balance and release lock
@@ -305,7 +315,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		return;
 
 	rq_lock(max_rq, &rf);
-	/* iterate over max_rq to get an eligible task */
+	
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
@@ -371,9 +381,9 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	if (rq->wfq.nr_running != 0)
 		return 1;
 
-	/* find the CPU with greatest total weight */
+	
 	for_each_possible_cpu(i) {
-		/* struct rq_flags rf_tmp; */
+		struct rq_flags rf_tmp;
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
 			this_cpu_idx = i;
@@ -382,7 +392,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 		/* since the spec says that the weights used here can
 		 * be an estimate, and we're not modifying the RQ in
-		 * this step, we can do this without using a lock. */
+		 * this step, we can do this without using a lock. 
 		/* rq_lock(rq_cpu, &rf_tmp); */
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
@@ -393,12 +403,12 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 		/* rq_unlock(rq_cpu, &rf_tmp); */
 	}
 
-	/* no CPUs with greater weight and at least 2 tasks */
+	
 	if (found_swappable_rq == 0)
 		return 1;
 
 	rq_lock(max_rq, &rf_max);
-	/* iterate over max_rq to get an eligible task */
+	
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
@@ -421,7 +431,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf_max);
-	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
 
 	return 0;
 }
