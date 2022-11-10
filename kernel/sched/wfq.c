@@ -431,7 +431,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf_max);
-	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
+	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 
 	return 0;
 }
