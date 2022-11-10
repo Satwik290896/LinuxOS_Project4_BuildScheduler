@@ -98,6 +98,8 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		}
 		else if (rq->wfq.nr_running > 1)
 			upd_happened = update_max_weight(rq, p);
+			
+		
 	} else {
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
@@ -117,8 +119,8 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq->wfq.load.weight += p->wfq_weight.weight;
 	}
 	
+	//list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 	if (upd_happened) {
-		list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 		rq->wfq.curr = p;
 	}
 	
@@ -145,9 +147,12 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	rq->wfq.load.weight -= p->wfq_weight.weight;
 	
 	if (rq->wfq.nr_running >= 1) {
-		first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
-		rq->wfq.max_weight = find_vft(first);
-		rq->wfq.curr = first;
+		if (p == rq->wfq.curr) {
+			list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+			first = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+			rq->wfq.max_weight = find_vft(first);
+			rq->wfq.curr = first;
+		}
 	} else {
 		rq->wfq.max_weight = MIN_VFT_INIT;
 		rq->wfq.curr = NULL;
@@ -182,6 +187,8 @@ static struct task_struct *pick_next_task_wfq(struct rq *rq)
 	if (rq->wfq.nr_running < 1)
 		return NULL;
 
+	list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
+	
 	p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
 	return p;
 }
