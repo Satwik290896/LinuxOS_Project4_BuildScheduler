@@ -101,7 +101,6 @@ struct task_struct init_task
 	},
 	.wfq_weight_change = 0,
 	.wfq_vruntime	= 0,
-	.sched_class	= &wfq_sched_class,
 	.tasks		= LIST_HEAD_INIT(init_task.tasks),
 #ifdef CONFIG_SMP
 	.pushable_tasks	= PLIST_NODE_INIT(init_task.pushable_tasks, MAX_PRIO),
