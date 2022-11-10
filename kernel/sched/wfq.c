@@ -72,6 +72,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		/* add p to this rq, rather than the rq with lowest total weight */
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		p->wfq_vruntime = wfq_rq->rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
@@ -100,6 +101,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	} else {
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		p->wfq_vruntime = wfq_rq->rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
