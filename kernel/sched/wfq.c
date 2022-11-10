@@ -293,26 +293,25 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
-	unsigned long flags;
-	
+	/* unsigned long flags;*/
 	/* 	grab a lock
 		check condition
 		if true update next_balance and release lock
-		do load balance*/
+		do load balance */
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
-	spin_lock_irqsave(&mLock, flags);
+	spin_lock(&mLock);
 	if (time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
 		atomic_set(&next_balance_counter, next_balance);
 	}else{
 		return;
 	}
-	spin_unlock_irqrestore(&mLock, flags);
+	spin_unlock(&mLock);
 	
-	/* find the CPU with largest and smallest total weight*/
-	for_each_possible_cpu(i) {
+	/* find the CPU with largest and smallest total weight */
+	for_each_online_cpu(i) {
 		rq = cpu_rq(i);
 		
-		/* rq_lock(rq, &rf);*/
+		 rq_lock(rq, &rf); 
 		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
 			max_weight = rq->wfq.load.weight;
 			max_rq = rq;
@@ -323,7 +322,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 			min_rq = rq;
 			min_cpu = i;
 		}
-		/* rq_unlock(rq, &rf);*/
+		rq_unlock(rq, &rf);
 	}
 	/* no available rq found*/
 	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ))
