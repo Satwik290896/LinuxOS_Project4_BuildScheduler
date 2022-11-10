@@ -448,8 +448,8 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	deactivate_task(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, this_cpu_idx);
-	double_unlock_balance(rq, max_rq);
 	activate_task(rq, stolen_task, 0);
+	double_unlock_balance(rq, max_rq);
 	resched_curr(rq);
 	rcu_read_unlock();
 
