@@ -293,19 +293,6 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
-	/* unsigned long flags;*/
-	/* 	grab a lock
-		check condition
-		if true update next_balance and release lock
-		do load balance */
-	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
-	spin_lock(&mLock);
-	if (time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
-		atomic_set(&next_balance_counter, next_balance);
-	}else{
-		return;
-	}
-	spin_unlock(&mLock);
 	
 	/* find the CPU with largest and smallest total weight */
 	for_each_online_cpu(i) {
@@ -324,8 +311,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		}
 		rq_unlock(rq, &rf);
 	}
-	/* no available rq found*/
-	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ))
+	/* no valid cpu found */
+	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ) || (max_cpu == min_cpu))
 		return;
 
 	rq_lock(max_rq, &rf);
@@ -349,9 +336,11 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		return;
 	}
 
-	/* add the stolen_task to rq with the lowest weight*/
+	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
+	set_task_cpu(stolen_task, this_cpu_idx);
 	rq_unlock(max_rq, &rf);
+
 	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	rq_unlock(min_rq, &rf);
@@ -365,12 +354,20 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 void trigger_load_balance_wfq(struct rq *rq)
 {
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
+	unsigned long flags;
+
 	if(!atomic_read(&next_balance_counter))
 		atomic_set(&next_balance_counter, next_balance);
-	// printk(KERN_WARNING "next_balance_counter: %d\n", atomic_read(&next_balance_counter));
-	if(time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))) {
-		/* atomic_set(&next_balance_counter, next_balance);*/
+	/* 	grab a lock and check condition
+		if true update next_balance, release lock
+		then do load balance */
+	spin_lock_irqsave(&mLock, flags);
+	if (time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
+		atomic_set(&next_balance_counter, next_balance);
+		spin_unlock_irqrestore(&mLock, flags);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
+	}else{
+		spin_unlock_irqrestore(&mLock, flags);
 	}
 }
 
