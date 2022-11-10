@@ -78,7 +78,7 @@ struct task_struct init_task
 	.prio		= MAX_PRIO - 20,
 	.static_prio	= MAX_PRIO - 20,
 	.normal_prio	= MAX_PRIO - 20,
-	.policy		= SCHED_NORMAL,
+	.policy		= SCHED_WFQ,
 	.cpus_ptr	= &init_task.cpus_mask,
 	.cpus_mask	= CPU_MASK_ALL,
 	.nr_cpus_allowed= NR_CPUS,
@@ -94,6 +94,13 @@ struct task_struct init_task
 		.run_list	= LIST_HEAD_INIT(init_task.rt.run_list),
 		.time_slice	= RR_TIMESLICE,
 	},
+	.wfq		= LIST_HEAD_INIT(init_task.wfq),
+	.wfq_weight	= {
+		.weight		= 10,
+		.inv_weight	= 0,
+	},
+	.wfq_weight_change = 0,
+	.wfq_vruntime	= 0,
 	.tasks		= LIST_HEAD_INIT(init_task.tasks),
 #ifdef CONFIG_SMP
 	.pushable_tasks	= PLIST_NODE_INIT(init_task.pushable_tasks, MAX_PRIO),

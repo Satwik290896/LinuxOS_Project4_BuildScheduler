@@ -8523,7 +8523,7 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 		return -EINVAL;
 
 	wfq_info_local.num_cpus = 0;
-	for_each_possible_cpu(i) {
+	for_each_online_cpu(i) {
 		if (wfq_info_local.num_cpus < MAX_CPUS_WFQ_INFO) {
 			struct rq *rq_cpu;
 
