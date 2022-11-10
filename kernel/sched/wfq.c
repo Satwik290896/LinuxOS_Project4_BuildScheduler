@@ -1,4 +1,3 @@
-
 #include "sched.h"
 #include "pelt.h"
 #include "linux/list_sort.h"
@@ -10,6 +9,7 @@
 #define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
 atomic_t next_balance_counter = ATOMIC_INIT(0);
+DEFINE_SPINLOCK(mLock);
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -269,7 +269,20 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
-
+	unsigned long flags;
+	/* 	grab a lock
+		check condition
+		if true update next_balance and release lock
+		do load balance */
+	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
+	spin_lock_irqsave(&mLock, flags);
+	if (time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
+		atomic_set(&next_balance_counter, next_balance);
+	}else{
+		return;
+	}
+	spin_unlock_irqrestore(&mLock, flags);
+	
 	/* find the CPU with largest and smallest total weight */
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
@@ -287,7 +300,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		}
 		/* rq_unlock(rq, &rf); */
 	}
-	if (!max_weight)
+	/* no available rq found */
+	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ))
 		return;
 
 	rq_lock(max_rq, &rf);
@@ -310,13 +324,15 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		rq_unlock(max_rq, &rf);
 		return;
 	}
+
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf);
-	printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
 	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	rq_unlock(min_rq, &rf);
+	printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
+	/* printk("load_balance_wfq called\n"); */
 }
 
 /*
@@ -327,9 +343,9 @@ void trigger_load_balance_wfq(struct rq *rq)
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
 	if(!atomic_read(&next_balance_counter))
 		atomic_set(&next_balance_counter, next_balance);
-	/* printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter); */
+	// printk(KERN_WARNING "next_balance_counter: %d\n", atomic_read(&next_balance_counter));
 	if(time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
-		atomic_set(&next_balance_counter, next_balance);
+		/* atomic_set(&next_balance_counter, next_balance); */
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
 	}
 }
