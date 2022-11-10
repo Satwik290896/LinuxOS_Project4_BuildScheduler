@@ -72,7 +72,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		/* add p to this rq, rather than the rq with lowest total weight */
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
-		p->wfq_vruntime = wfq_rq->rq_cpu_runtime;
+		p->wfq_vruntime = rq->wfq.rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
@@ -101,7 +101,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	} else {
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
-		p->wfq_vruntime = wfq_rq->rq_cpu_runtime;
+		p->wfq_vruntime = rq->wfq.rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
 		if (rq->wfq.nr_running >= 1)
@@ -263,14 +263,14 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 
 static int load_balance_wfq(void)
 {
-	struct rq_flags rf;
+	/*struct rq_flags rf;
 	struct rq *rq, *max_rq, *min_rq;
 	int i;
 	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 
-	/* find the CPU with largest and smallest total weight */
+
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
 		
@@ -289,7 +289,7 @@ static int load_balance_wfq(void)
 		return 1;
 
 	rq_lock(max_rq, &rf);
-	/* iterate over max_rq to get an eligible task */
+	
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
@@ -308,11 +308,12 @@ static int load_balance_wfq(void)
 		rq_unlock(max_rq, &rf);
 		return 1;
 	}
-	/* add the stolen_task to rq with the lowest weight */
+	
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf);
-	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
-	return 0;
+	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
+	
+	return 1;
 }
 
 /*
@@ -320,7 +321,7 @@ static int load_balance_wfq(void)
  */
 void trigger_load_balance_wfq(void)
 {
-	unsigned long interval = msecs_to_jiffies(500);
+	/*unsigned long interval = msecs_to_jiffies(500);
 	if(!next_balance_counter)
 		next_balance_counter = jiffies;
 	// printk(KERN_WARNING "next_balance_counter: %lu\n", next_balance_counter);
@@ -328,14 +329,14 @@ void trigger_load_balance_wfq(void)
 		raise_softirq(SCHED_SOFTIRQ);
 	load_balance_wfq();
 	// nohz_balancer_kick(rq);
-	next_balance_counter += interval;
+	next_balance_counter += interval;*/
 }
 
 #ifdef CONFIG_SMP
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
-	unsigned long max_weight = 0;
+	/*unsigned long max_weight = 0;
 	int i;
 	int this_cpu_idx = 0;
 	int max_cpu_idx = 0;
@@ -352,9 +353,9 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	if (rq->wfq.nr_running != 0)
 		return 1;
 
-	/* find the CPU with greatest total weight */
+	
 	for_each_possible_cpu(i) {
-		/* struct rq_flags rf_tmp; */
+		/* struct rq_flags rf_tmp;
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
 			this_cpu_idx = i;
@@ -363,23 +364,23 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 		/* since the spec says that the weights used here can
 		 * be an estimate, and we're not modifying the RQ in
-		 * this step, we can do this without using a lock. */
-		/* rq_lock(rq_cpu, &rf_tmp); */
+		 * this step, we can do this without using a lock. 
+		/* rq_lock(rq_cpu, &rf_tmp); 
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
 			max_cpu_idx = i;
 			max_weight = rq_cpu->wfq.load.weight;
 			max_rq = rq_cpu;
 		}
-		/* rq_unlock(rq_cpu, &rf_tmp); */
+		/* rq_unlock(rq_cpu, &rf_tmp);
 	}
 
-	/* no CPUs with greater weight and at least 2 tasks */
+	
 	if (found_swappable_rq == 0)
 		return 1;
 
 	rq_lock(max_rq, &rf_max);
-	/* iterate over max_rq to get an eligible task */
+	
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
@@ -402,9 +403,9 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	rq_unlock(max_rq, &rf_max);
-	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+	enqueue_task_wfq(rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
 
-	return 0;
+	return 1;
 }
 
 static int
