@@ -572,23 +572,6 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	if (!is_periodic_balance_req)
 		return;
 	
-	/* find the CPU with largest and smallest total weight */
-	/*for_each_online_cpu(i) {
-		rq = cpu_rq(i);
-		
-		 rq_lock(rq, &rf); 
-		if ((rq->wfq.load.weight > max_weight) && (rq->wfq.nr_running >= 2)) {
-			max_weight = rq->wfq.load.weight;
-			max_rq = rq;
-			max_cpu = i;
-		}
-		if ((rq->wfq.load.weight < min_weight) && (rq->wfq.nr_running >= 2)) {
-			min_weight = rq->wfq.load.weight;
-			min_rq = rq;
-			min_cpu = i;
-		}
-		rq_unlock(rq, &rf);
-	}*/
 
 	//spin_lock_irqsave(&min_max_lock, flags);
 	min_cpu = lowest_weight_cpu;
@@ -596,57 +579,30 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	max_rq = cpu_rq(max_cpu);
 	min_rq = cpu_rq(min_cpu);
 	
-	//rq_lock(max_rq, &rf);
-	raw_spin_lock_irqsave(&max_rq->lock, rf->flags);
-	double_lock_balance(max_rq, min_rq);
-	
-	max_weight = max_rq->wfq.load.weight;
-	min_weight = min_rq->wfq.load.weight;
 	/* no valid cpu found */
-	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ) || (max_cpu == min_cpu)) {
-		double_unlock_balance(max_rq, min_rq);
-		raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
-		//rq_unlock(max_rq, &rf);
+	if (max_cpu == min_cpu) {
 		return;
 	}
 
-	//rcu_read_lock();
-	
-	/*list_for_each_entry_rcu(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
-		if (curr->sched_class != &wfq_sched_class)
-			continue;
-		if (kthread_is_per_cpu(curr))
-			continue;
-		if (!cpumask_test_cpu(min_cpu, curr->cpus_ptr))
-			continue;
-		if (task_running(max_rq, curr))
-			continue;
-
-		stolen_task = curr;
-		found_eligible = 1;
-		break;
-	}
-	if(!found_eligible){
-		//rcu_read_unlock();
-		double_unlock_balance(max_rq, min_rq);
-		raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
-		return;
-	}*/
-
-	/* add the stolen_task to rq with the lowest weight */
-	/*deactivate_task(max_rq, stolen_task, 0);
-	set_task_cpu(stolen_task, min_cpu);
-	activate_task(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
-	//rcu_read_unlock();
 	is_pick_next_last_pick = true;
 	stolen_task = pick_next_task_wfq(max_rq);
 	is_pick_next_last_pick = false;
+	
+	raw_spin_lock(&stolen_task->pi_lock);
+	rq_lock(max_rq, rf);
+	max_weight = max_rq->wfq.load.weight;
+	
+	if (max_weight == 0) {
+		rq_unlock(max_rq, rf);
+		raw_spin_unlock(&stolen_task->pi_lock);
+	}
 	temp_rq = migrate_task_wfq(max_rq, rf, stolen_task, min_cpu);
 	
-	double_unlock_balance(max_rq, min_rq);
-	raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
-	//printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
-	/* printk("load_balance_wfq called\n"); */
+	if (temp_rq == max_rq) {
+		rq_unlock(max_rq, rf);
+	}
+	raw_spin_unlock(&stolen_task->pi_lock);
+
 	is_periodic_balance_req = false;
 }
 
