@@ -8,7 +8,7 @@
 #define MIN_VFT_INIT	0xFFFFFFFFFFFFFFFF
 #define MAX_VALUE	0xFFFFFFFFFFFFFFFF
 #define SCALING_FACTOR	0xFFFFFF
-atomic_t next_balance_counter = ATOMIC_INIT(0);
+atomic_long_t next_balance_counter = ATOMIC_INIT(0);
 DEFINE_SPINLOCK(mLock);
 bool is_periodic_balance_req = false;
 
@@ -367,14 +367,14 @@ void trigger_load_balance_wfq(struct rq *rq)
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
 	unsigned long flags;
 
-	if(!atomic_read(&next_balance_counter))
-		atomic_set(&next_balance_counter, next_balance);
+	if(!atomic_long_read(&next_balance_counter))
+		atomic_long_set(&next_balance_counter, next_balance);
 	/* 	grab a lock and check condition
 		if true update next_balance, release lock
 		then do load balance */
 	spin_lock_irqsave(&mLock, flags);
-	if (time_after_eq(jiffies, (unsigned long)atomic_read(&next_balance_counter))){
-		atomic_set(&next_balance_counter, next_balance);
+	if (time_after_eq(jiffies, (unsigned long)atomic_long_read(&next_balance_counter))){
+		atomic_long_set(&next_balance_counter, next_balance);
 		spin_unlock_irqrestore(&mLock, flags);
 		raise_softirq(SCHED_WFQ_SOFTIRQ);
 	}else{
