@@ -12,6 +12,22 @@ atomic_long_t next_balance_counter = ATOMIC_INIT(0);
 DEFINE_SPINLOCK(mLock);
 bool is_periodic_balance_req = false;
 
+DEFINE_SPINLOCK(min_max_lock);
+int highest_weight_cpu = 0;
+u64 highest_weight_among_cpus = 0;
+int s_highest_weight_cpu = 1;
+u64 s_highest_weight_among_cpus = 0;
+int lowest_weight_cpu = 0;
+u64 lowest_weight_among_cpus = 0;
+int s_lowest_weight_cpu = 1;
+u64 s_lowest_weight_among_cpus = 0;
+
+DEFINE_SPINLOCK(min_max_lock_v2);
+int D_lowest_weight_cpu = 0;
+u64 D_lowest_weight_among_cpus = 0;
+int D_s_lowest_weight_cpu = 1;
+u64 D_s_lowest_weight_among_cpus = 0;
+
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
 	wfq_rq->load.weight = 0;
@@ -57,7 +73,193 @@ update_max_weight (struct rq *rq, struct task_struct *p)
 	}
 	
 	return upd_happened;
-}			
+}
+
+static void D_swap(void) {
+	int temp_cpu;
+	u64 temp_weight;
+
+	if (D_lowest_weight_among_cpus > D_s_lowest_weight_among_cpus) {
+			temp_cpu = D_lowest_weight_cpu;
+			temp_weight = D_lowest_weight_among_cpus;
+	
+			D_lowest_weight_cpu = D_s_lowest_weight_cpu;
+			D_lowest_weight_among_cpus = D_s_lowest_weight_among_cpus;
+		
+			D_s_lowest_weight_cpu = temp_cpu;
+			D_s_lowest_weight_among_cpus = temp_weight;
+	}
+}
+
+static void D_reorder_l(int r, int this_cpu, u64 this_weight) {
+	int temp_cpu;
+	u64 temp_weight;
+	
+	if (r == 1) {
+		temp_cpu = D_lowest_weight_cpu;
+		temp_weight = D_lowest_weight_among_cpus;
+		
+		D_lowest_weight_cpu = this_cpu;
+		D_lowest_weight_among_cpus = this_weight;
+
+		D_s_lowest_weight_cpu = temp_cpu;
+		D_s_lowest_weight_among_cpus = temp_weight;		
+		
+	} else if (r == 2) {
+		D_s_lowest_weight_cpu = this_cpu;
+		D_s_lowest_weight_among_cpus = this_weight;		
+	}
+}
+		
+static void update_dMax(struct rq *rq) {
+	int this_cpu = rq->cpu;
+	u64 this_cpu_wfq_weight = rq->wfq.load.weight;
+
+	/*Lowest weight logic*/
+	if ((D_lowest_weight_cpu == this_cpu) || (D_s_lowest_weight_cpu == this_cpu)) {
+		if (D_lowest_weight_cpu == this_cpu) {
+			D_lowest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		if (D_s_lowest_weight_cpu == this_cpu) {
+			D_s_lowest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		D_swap();
+	} else {
+		if (D_lowest_weight_among_cpus < this_cpu_wfq_weight) {
+			D_reorder_l(1, this_cpu, this_cpu_wfq_weight);
+		} else {
+			if (D_s_lowest_weight_among_cpus < this_cpu_wfq_weight) {
+				D_reorder_l(2, this_cpu, this_cpu_wfq_weight);
+			}
+		}	
+	}
+
+}
+
+static void swap_hl(int s) {
+	int temp_cpu;
+	u64 temp_weight;
+
+	if (s == 1) {
+		if (highest_weight_among_cpus < s_highest_weight_among_cpus) {
+			temp_cpu = highest_weight_cpu;
+			temp_weight = highest_weight_among_cpus;
+	
+			highest_weight_cpu = s_highest_weight_cpu;
+			highest_weight_among_cpus = s_highest_weight_among_cpus;
+		
+			s_highest_weight_cpu = temp_cpu;
+			s_highest_weight_among_cpus = temp_weight;
+		}
+	} else if (s == 0) {
+		if (lowest_weight_among_cpus > s_lowest_weight_among_cpus) {
+			temp_cpu = lowest_weight_cpu;
+			temp_weight = lowest_weight_among_cpus;
+	
+			lowest_weight_cpu = s_lowest_weight_cpu;
+			lowest_weight_among_cpus = s_lowest_weight_among_cpus;
+		
+			s_lowest_weight_cpu = temp_cpu;
+			s_lowest_weight_among_cpus = temp_weight;
+		}	
+	}
+}
+
+
+static void reorder_h(int r, int this_cpu, u64 this_weight) {
+	int temp_cpu;
+	u64 temp_weight;
+	
+	if (r == 1) {
+		temp_cpu = highest_weight_cpu;
+		temp_weight = highest_weight_among_cpus;
+		
+		highest_weight_cpu = this_cpu;
+		highest_weight_among_cpus = this_weight;
+
+		s_highest_weight_cpu = temp_cpu;
+		s_highest_weight_among_cpus = temp_weight;		
+		
+	} else if (r == 2) {
+		s_highest_weight_cpu = this_cpu;
+		s_highest_weight_among_cpus = this_weight;		
+	}
+}
+
+static void reorder_l(int r, int this_cpu, u64 this_weight) {
+	int temp_cpu;
+	u64 temp_weight;
+	
+	if (r == 1) {
+		temp_cpu = lowest_weight_cpu;
+		temp_weight = lowest_weight_among_cpus;
+		
+		lowest_weight_cpu = this_cpu;
+		lowest_weight_among_cpus = this_weight;
+
+		s_lowest_weight_cpu = temp_cpu;
+		s_lowest_weight_among_cpus = temp_weight;		
+		
+	} else if (r == 2) {
+		s_lowest_weight_cpu = this_cpu;
+		s_lowest_weight_among_cpus = this_weight;		
+	}
+}
+
+	
+static void update_min_max_cpu_buf(struct rq *rq)
+{
+	int this_cpu = rq->cpu;
+	u64 this_cpu_wfq_weight = rq->wfq.load.weight;
+
+	/*Highest weight logic*/
+	if ((highest_weight_cpu == this_cpu) || (s_highest_weight_cpu == this_cpu)) {
+		if (highest_weight_cpu == this_cpu) {
+			highest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		if (s_highest_weight_cpu == this_cpu) {
+			s_highest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		swap_hl(1);
+	} else {
+		if (highest_weight_among_cpus < this_cpu_wfq_weight) {
+			reorder_h(1, this_cpu, this_cpu_wfq_weight);
+		} else {
+			if (s_highest_weight_among_cpus < this_cpu_wfq_weight) {
+				reorder_h(2, this_cpu, this_cpu_wfq_weight);
+			}
+		}	
+	}
+	
+	/*Lowest weight logic*/
+	if ((lowest_weight_cpu == this_cpu) || (s_lowest_weight_cpu == this_cpu)) {
+		if (lowest_weight_cpu == this_cpu) {
+			lowest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		if (s_lowest_weight_cpu == this_cpu) {
+			s_lowest_weight_among_cpus = this_cpu_wfq_weight;
+		}
+		
+		swap_hl(0);
+	} else {
+		if (lowest_weight_among_cpus > this_cpu_wfq_weight) {
+			reorder_l(1, this_cpu, this_cpu_wfq_weight);
+		} else {
+			if (s_lowest_weight_among_cpus > this_cpu_wfq_weight) {
+				reorder_l(2, this_cpu, this_cpu_wfq_weight);
+			}
+		}	
+	}	
+	
+	
+	
+	
+}
 /*
  * Adding/removing a task to/from a priority array:
  */
@@ -66,6 +268,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	
 	bool upd_happened = false;
+	unsigned long flags_2 = 0;
 		
 	if (p->sched_class != &wfq_sched_class)
 		return;	
@@ -131,6 +334,14 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	/* required
 	 * list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);*/
 	
+	spin_lock_irqsave_nested(&min_max_lock, flags_2, SINGLE_DEPTH_NESTING);
+	if (rq->wfq.nr_running >= 2) {
+		update_min_max_cpu_buf(rq);
+		update_dMax(rq);
+	} else {
+		update_dMax(rq);
+	}
+	spin_unlock_irqrestore(&min_max_lock, flags_2);
 }
 
 
@@ -139,6 +350,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct task_struct *first;
+	unsigned long flags_2 = 0;
 	
 		
 	if (p->sched_class != &wfq_sched_class)
@@ -165,6 +377,15 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		rq->wfq.max_weight = MIN_VFT_INIT;
 		rq->wfq.curr = NULL;
 	}
+	
+	spin_lock_irqsave_nested(&min_max_lock, flags_2, SINGLE_DEPTH_NESTING);
+	if (rq->wfq.nr_running >= 2) {
+		update_min_max_cpu_buf(rq);
+		update_dMax(rq);
+	} else {
+		update_dMax(rq);
+	}
+	spin_unlock_irqrestore(&min_max_lock, flags_2);
 	
 }
 
@@ -297,12 +518,13 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	struct task_struct *curr, *stolen_task;
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
+	unsigned long flags = 0;
 	
 	if (!is_periodic_balance_req)
 		return;
 	
 	/* find the CPU with largest and smallest total weight */
-	for_each_online_cpu(i) {
+	/*for_each_online_cpu(i) {
 		rq = cpu_rq(i);
 		
 		 rq_lock(rq, &rf); 
@@ -317,16 +539,29 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 			min_cpu = i;
 		}
 		rq_unlock(rq, &rf);
-	}
-	/* no valid cpu found */
-	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ) || (max_cpu == min_cpu))
-		return;
+	}*/
 
+	//spin_lock_irqsave(&min_max_lock, flags);
+	min_cpu = lowest_weight_cpu;
+	max_cpu = highest_weight_cpu;
+	max_rq = cpu_rq(max_cpu);
+	min_rq = cpu_rq(min_cpu);
+	
 	rq_lock(max_rq, &rf);
 	double_lock_balance(max_rq, min_rq);
-	rcu_read_lock();
 	
-	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
+	max_weight = max_rq->wfq.load.weight;
+	min_weight = min_rq->wfq.load.weight;
+	/* no valid cpu found */
+	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ) || (max_cpu == min_cpu)) {
+		double_unlock_balance(max_rq, min_rq);
+		rq_unlock(max_rq, &rf);
+		return;
+	}
+
+	//rcu_read_lock();
+	
+	list_for_each_entry_rcu(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
 		if (kthread_is_per_cpu(curr))
@@ -341,7 +576,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		break;
 	}
 	if(!found_eligible){
-		rcu_read_unlock();
+		//rcu_read_unlock();
 		double_unlock_balance(max_rq, min_rq);
 		rq_unlock(max_rq, &rf);
 		return;
@@ -351,7 +586,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, this_cpu_idx);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
-	rcu_read_unlock();
+	//rcu_read_unlock();
 	double_unlock_balance(max_rq, min_rq);
 	rq_unlock(max_rq, &rf);
 	//printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
@@ -365,7 +600,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 void trigger_load_balance_wfq(struct rq *rq)
 {
 	unsigned long next_balance = jiffies + msecs_to_jiffies(500); 
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if(!atomic_long_read(&next_balance_counter))
 		atomic_long_set(&next_balance_counter, next_balance);
@@ -386,17 +621,19 @@ void trigger_load_balance_wfq(struct rq *rq)
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
-	unsigned long max_weight = 0;
+	/*unsigned long max_weight = 0;
+	unsigned long max_weight_2 = 0;
 	int i;
 	int this_cpu_idx = 0;
 	int max_cpu_idx = 0;
+	int max_cpu_idx_2 = 0;
 	int found_swappable_rq = 0;
 	struct rq *max_rq;
 	int found_eligible = 0;
 	struct task_struct *curr;
 	struct task_struct *stolen_task;
 	int this_cpu = rq->cpu;
-
+	unsigned long flags;
 		
 	if (!cpu_active(this_cpu))
 		return 0;
@@ -406,8 +643,8 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	if (rq->wfq.nr_running != 0)
 		return 1;
-
-	for_each_online_cpu(i) {
+	*/
+	/*for_each_online_cpu(i) {
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
 			this_cpu_idx = i;
@@ -422,17 +659,41 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 			max_rq = rq_cpu;
 		}
 		double_unlock_balance(rq, rq_cpu);
+	}*/
+
+
+	/*spin_lock_irqsave(&min_max_lock, flags);
+	max_cpu_idx = highest_weight_cpu;
+	max_weight = highest_weight_among_cpus;
+	max_cpu_idx_2 = highest_weight_cpu;
+	max_weight_2 = highest_weight_among_cpus;
+	
+	
+	if ((max_weight == 0) || (max_cpu_idx == rq->cpu) ) {
+		if ((max_weight_2 == 0) || (max_cpu_idx_2 == rq->cpu) )
+			found_swappable_rq = 0;
+		else {
+			max_weight = max_weight_2;
+			max_cpu_idx = max_cpu_idx_2;
+			found_swappable_rq = 1;
+		}
 	}
-
-	
-	if (found_swappable_rq == 0)
+		
+	if (found_swappable_rq == 0) {
+		spin_unlock_irqrestore(&min_max_lock, flags);
 		return 0;
-
-	
+	}
+	else {
+		max_rq = cpu_rq(max_cpu_idx);
+	}
+	spin_unlock_irqrestore(&min_max_lock, flags);
+		
 	double_lock_balance(rq, max_rq);
-	rcu_read_lock();
+	*/
+	/* no valid cpu found */
+	//rcu_read_lock();
 
-	if (max_rq->wfq.nr_running < 2) {
+	/*if (max_rq->wfq.nr_running < 2) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
 		return 0;
@@ -465,15 +726,15 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	resched_curr(rq);
 	rcu_read_unlock();
 	double_unlock_balance(rq, max_rq);
+	*/
 
-
-	return 1;
+	return 0;
 }
 
 static int
 select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
-	int i;
+	/*int i;
 	struct rq_flags rf;
 	u64 min_weight = MAX_WEIGHT_WFQ;
 	int min_weight_cpu = cpu;
@@ -490,8 +751,14 @@ select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 		}
 
 		rq_unlock(rq_cpu, &rf);
-	}
-	return min_weight_cpu;
+	}*/
+	int min_cpu;
+	unsigned long flags_2 = 0;
+	spin_lock_irqsave(&min_max_lock, flags_2);
+	min_cpu = D_lowest_weight_cpu;
+	spin_unlock_irqrestore(&min_max_lock, flags_2);
+	printk("[select_task] cpu: %d\n", min_cpu);
+	return min_cpu;
 }
 
 static void rq_online_wfq(struct rq *rq)
