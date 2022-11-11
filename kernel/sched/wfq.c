@@ -515,15 +515,45 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+bool is_cpu_allowed_wfq(struct task_struct *p, int cpu)
+{
+	if (!cpumask_test_cpu(cpu, p->cpus_ptr))
+		return false;
+
+	if (is_per_cpu_kthread(p))
+		return cpu_online(cpu);
+
+	return cpu_active(cpu);
+}
+
+struct rq *move_queued_task_wfq(struct rq *rq, struct rq_flags *rf,
+				   struct task_struct *p, int new_cpu)
+{
+	lockdep_assert_held(&rq->lock);
+
+	deactivate_task(rq, p, DEQUEUE_NOCLOCK);
+	set_task_cpu(p, new_cpu);
+	rq_unlock(rq, rf);
+
+	rq = cpu_rq(new_cpu);
+
+	rq_lock(rq, rf);
+	BUG_ON(task_cpu(p) != new_cpu);
+	activate_task(rq, p, 0);
+	check_preempt_curr(rq, p, 0);
+
+	return rq;
+}
+
 struct rq *migrate_task_wfq(struct rq *rq, struct rq_flags *rf,
 				 struct task_struct *p, int dest_cpu)
 {
 	/* Affinity changed (again). */
-	if (!is_cpu_allowed(p, dest_cpu))
+	if (!is_cpu_allowed_wfq(p, dest_cpu))
 		return rq;
 
 	update_rq_clock(rq);
-	rq = move_queued_task(rq, rf, p, dest_cpu);
+	rq = move_queued_task_wfq(rq, rf, p, dest_cpu);
 
 	return rq;
 }
