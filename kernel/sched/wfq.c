@@ -602,9 +602,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	
 	temp_rq = migrate_task_wfq(max_rq, rf, stolen_task, min_cpu);
 	
-	if (temp_rq == max_rq) {
-		rq_unlock(max_rq, rf);
-	}
+	rq_unlock(temp_rq, rf);
 	raw_spin_unlock(&stolen_task->pi_lock);
 
 	is_periodic_balance_req = false;
