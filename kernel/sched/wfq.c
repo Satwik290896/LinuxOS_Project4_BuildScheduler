@@ -341,6 +341,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		break;
 	}
 	if(!found_eligible){
+		rcu_read_unlock();
+		double_unlock_balance(max_rq, min_rq);
 		rq_unlock(max_rq, &rf);
 		return;
 	}
