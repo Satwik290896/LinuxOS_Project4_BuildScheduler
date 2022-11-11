@@ -584,12 +584,14 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		return;
 	}
 
+	rq_lock(max_rq, rf);
 	is_pick_next_last_pick = true;
 	stolen_task = pick_next_task_wfq(max_rq);
 	is_pick_next_last_pick = false;
 	
+	rq_unlock(max_rq, rf);
 	raw_spin_lock(&stolen_task->pi_lock);
-	rq_lock(max_rq, rf);
+	rq_relock(max_rq, rf);
 	max_weight = max_rq->wfq.load.weight;
 	
 	if ((max_weight == 0) || (!task_on_rq_queued(stolen_task))) {
