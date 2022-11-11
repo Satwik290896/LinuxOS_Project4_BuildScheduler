@@ -10,6 +10,7 @@
 #define SCALING_FACTOR	0xFFFFFF
 atomic_t next_balance_counter = ATOMIC_INIT(0);
 DEFINE_SPINLOCK(mLock);
+bool is_periodic_balance_req = false;
 
 void init_wfq_rq(struct wfq_rq *wfq_rq)
 {
@@ -69,10 +70,12 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	if (p->sched_class != &wfq_sched_class)
 		return;	
 
+	is_periodic_balance_req = true;
 	if (flags & ENQUEUE_WFQ_ADD_EXACT) {
 		/* add p to this rq, rather than the rq with lowest total weight */
 
 		list_add_tail(&p->wfq, &rq->wfq.wfq_rq_list);
+		
 		p->wfq_vruntime = rq->wfq.rq_cpu_runtime;
 		
 		/*Doing this before incrementing*/
@@ -144,6 +147,7 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	if (rq->wfq.nr_running == 0)
 		return;
 
+	is_periodic_balance_req = true;
 	list_del(&p->wfq);
 	(rq->wfq.nr_running)--;
 	sub_nr_running(rq, 1);
@@ -294,6 +298,9 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	int found_eligible = 0, this_cpu_idx = 0;
 	int min_cpu, max_cpu;
 	
+	if (!is_periodic_balance_req)
+		return;
+	
 	/* find the CPU with largest and smallest total weight */
 	for_each_online_cpu(i) {
 		rq = cpu_rq(i);
@@ -316,6 +323,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		return;
 
 	rq_lock(max_rq, &rf);
+	double_lock_balance(max_rq, min_rq);
+	rcu_read_lock();
 	
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
@@ -339,13 +348,13 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, this_cpu_idx);
-	rq_unlock(max_rq, &rf);
-
-	rq_lock(min_rq, &rf);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
-	rq_unlock(min_rq, &rf);
-	printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
+	rcu_read_unlock();
+	double_unlock_balance(max_rq, min_rq);
+	rq_unlock(max_rq, &rf);
+	//printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
 	/* printk("load_balance_wfq called\n"); */
+	is_periodic_balance_req = false;
 }
 
 /*
@@ -384,9 +393,14 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	int found_eligible = 0;
 	struct task_struct *curr;
 	struct task_struct *stolen_task;
+	int this_cpu = rq->cpu;
 
+		
+	if (!cpu_active(this_cpu))
+		return 0;
+		
 	if (p->sched_class != &wfq_sched_class)
-		return 1;
+		return 0;
 
 	if (rq->wfq.nr_running != 0)
 		return 1;
@@ -410,15 +424,16 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	
 	if (found_swappable_rq == 0)
-		return 1;
+		return 0;
 
-	rcu_read_lock();
+	
 	double_lock_balance(rq, max_rq);
+	rcu_read_lock();
 
 	if (max_rq->wfq.nr_running < 2) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
-		return 1;
+		return 0;
 	}
 
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
@@ -439,17 +454,18 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	if (found_eligible == 0) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
-		return 1;
+		return 0;
 	}
 
 	deactivate_task(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, this_cpu_idx);
 	activate_task(rq, stolen_task, 0);
-	double_unlock_balance(rq, max_rq);
 	resched_curr(rq);
 	rcu_read_unlock();
+	double_unlock_balance(rq, max_rq);
 
-	return 0;
+
+	return 1;
 }
 
 static int
