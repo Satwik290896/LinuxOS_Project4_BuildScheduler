@@ -566,7 +566,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 			continue;
 		if (kthread_is_per_cpu(curr))
 			continue;
-		if (!cpumask_test_cpu(this_cpu_idx, curr->cpus_ptr))
+		if (!cpumask_test_cpu(min_cpu, curr->cpus_ptr))
 			continue;
 		if (task_running(max_rq, curr))
 			continue;
@@ -584,7 +584,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 
 	/* add the stolen_task to rq with the lowest weight */
 	dequeue_task_wfq(max_rq, stolen_task, 0);
-	set_task_cpu(stolen_task, this_cpu_idx);
+	set_task_cpu(stolen_task, min_cpu);
 	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	//rcu_read_unlock();
 	double_unlock_balance(max_rq, min_rq);
