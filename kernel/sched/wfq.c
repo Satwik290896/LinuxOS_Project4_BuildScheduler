@@ -180,7 +180,7 @@ static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int fla
 {
 	if (p->sched_class != &wfq_sched_class)
 		return;	
-	if (rq->wfq.max_weight < find_vft(p))
+	if ((rq->wfq.max_weight < find_vft(p))  && (rq->wfq.curr != p))
 	{
 		resched_curr(rq);
 	}
@@ -258,7 +258,7 @@ static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 	}	
 	
 	
-	if (rq->wfq.max_weight < find_vft(curr))
+	if ((rq->wfq.max_weight < find_vft(curr)) && (rq->wfq.curr != curr))
 	{
 		resched_curr(rq);
 	}
