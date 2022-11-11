@@ -515,6 +515,19 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+struct rq *migrate_task_wfq(struct rq *rq, struct rq_flags *rf,
+				 struct task_struct *p, int dest_cpu)
+{
+	/* Affinity changed (again). */
+	if (!is_cpu_allowed(p, dest_cpu))
+		return rq;
+
+	update_rq_clock(rq);
+	rq = move_queued_task(rq, rf, p, dest_cpu);
+
+	return rq;
+}
+
 static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 {
 	struct rq_flags *rf;
@@ -598,7 +611,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	is_pick_next_last_pick = true;
 	stolen_task = pick_next_task_wfq(max_rq);
 	is_pick_next_last_pick = false;
-	temp_rq = __migrate_task(max_rq, rf, stolen_task, min_cpu);
+	temp_rq = migrate_task_wfq(max_rq, rf, stolen_task, min_cpu);
 	
 	double_unlock_balance(max_rq, min_rq);
 	raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
