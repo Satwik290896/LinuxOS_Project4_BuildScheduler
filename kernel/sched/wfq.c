@@ -682,7 +682,6 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	max_cpu_idx_2 = s_highest_weight_cpu;
 	max_weight_2 = s_highest_weight_among_cpus;
 	
-	
 	if ((max_weight == 0) || (max_cpu_idx == rq->cpu) ) {
 		if ((max_weight_2 == 0) || (max_cpu_idx_2 == rq->cpu) )
 			found_swappable_rq = 0;
@@ -771,7 +770,6 @@ select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 	spin_lock_irqsave(&min_max_lock, flags_2);
 	min_cpu = D_lowest_weight_cpu;
 	spin_unlock_irqrestore(&min_max_lock, flags_2);
-	printk("[select_task] cpu: %d\n", min_cpu);
 	return min_cpu;
 }
 
