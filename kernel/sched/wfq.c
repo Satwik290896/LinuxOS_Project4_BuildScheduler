@@ -511,7 +511,7 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 
 static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 {
-	struct rq_flags rf;
+	struct rq_flags *rf;
 	struct rq *rq, *max_rq, *min_rq;
 	int i;
 	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
@@ -547,7 +547,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	max_rq = cpu_rq(max_cpu);
 	min_rq = cpu_rq(min_cpu);
 	
-	rq_lock(max_rq, &rf);
+	//rq_lock(max_rq, &rf);
+	raw_spin_lock_irqsave(&max_rq->lock, rf->flags);
 	double_lock_balance(max_rq, min_rq);
 	
 	max_weight = max_rq->wfq.load.weight;
@@ -555,7 +556,8 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	/* no valid cpu found */
 	if ((max_weight == 0) || (min_weight == MAX_WEIGHT_WFQ) || (max_cpu == min_cpu)) {
 		double_unlock_balance(max_rq, min_rq);
-		rq_unlock(max_rq, &rf);
+		raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
+		//rq_unlock(max_rq, &rf);
 		return;
 	}
 
@@ -578,17 +580,17 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	if(!found_eligible){
 		//rcu_read_unlock();
 		double_unlock_balance(max_rq, min_rq);
-		rq_unlock(max_rq, &rf);
+		raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
 		return;
 	}
 
 	/* add the stolen_task to rq with the lowest weight */
-	dequeue_task_wfq(max_rq, stolen_task, 0);
+	deactivate_task(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, min_cpu);
-	enqueue_task_wfq(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+	activate_task(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
 	//rcu_read_unlock();
 	double_unlock_balance(max_rq, min_rq);
-	rq_unlock(max_rq, &rf);
+	raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
 	//printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
 	/* printk("load_balance_wfq called\n"); */
 	is_periodic_balance_req = false;
