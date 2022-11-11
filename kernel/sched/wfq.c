@@ -592,10 +592,12 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	rq_lock(max_rq, rf);
 	max_weight = max_rq->wfq.load.weight;
 	
-	if (max_weight == 0) {
+	if ((max_weight == 0) || (!task_on_rq_queued(stolen_task))) {
 		rq_unlock(max_rq, rf);
 		raw_spin_unlock(&stolen_task->pi_lock);
+		return;
 	}
+	
 	temp_rq = migrate_task_wfq(max_rq, rf, stolen_task, min_cpu);
 	
 	if (temp_rq == max_rq) {
