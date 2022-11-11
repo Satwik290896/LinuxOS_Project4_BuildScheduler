@@ -11,6 +11,8 @@
 atomic_long_t next_balance_counter = ATOMIC_INIT(0);
 DEFINE_SPINLOCK(mLock);
 bool is_periodic_balance_req = false;
+bool is_pick_next_last_pick = false;
+
 
 DEFINE_SPINLOCK(min_max_lock);
 int highest_weight_cpu = 0;
@@ -418,11 +420,15 @@ static struct task_struct *pick_next_task_wfq(struct rq *rq)
 
 	list_sort(NULL, &rq->wfq.wfq_rq_list, wfq_cmp);
 	
-	p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+	if (!is_pick_next_last_pick) {
+		p = list_first_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
 	
-	/*safety*/
-	rq->wfq.curr = p;
-	rq->wfq.max_weight = find_vft(p);
+		/*safety*/
+		rq->wfq.curr = p;
+		rq->wfq.max_weight = find_vft(p);
+	} else {
+		p = list_last_entry(&rq->wfq.wfq_rq_list, struct task_struct, wfq);
+	}
 	
 	return p;
 }
@@ -512,7 +518,7 @@ static unsigned int get_rr_interval_wfq(struct rq *rq, struct task_struct *task)
 static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 {
 	struct rq_flags *rf;
-	struct rq *rq, *max_rq, *min_rq;
+	struct rq *rq, *max_rq, *min_rq, *temp_rq;
 	int i;
 	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
 	struct task_struct *curr, *stolen_task;
@@ -563,7 +569,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 
 	//rcu_read_lock();
 	
-	list_for_each_entry_rcu(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
+	/*list_for_each_entry_rcu(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
 		if (kthread_is_per_cpu(curr))
@@ -582,13 +588,18 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 		double_unlock_balance(max_rq, min_rq);
 		raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
 		return;
-	}
+	}*/
 
 	/* add the stolen_task to rq with the lowest weight */
-	deactivate_task(max_rq, stolen_task, 0);
+	/*deactivate_task(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, min_cpu);
-	activate_task(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);
+	activate_task(min_rq, stolen_task, ENQUEUE_WFQ_ADD_EXACT);*/
 	//rcu_read_unlock();
+	is_pick_next_last_pick = true;
+	stolen_task = pick_next_task_wfq(max_rq);
+	is_pick_next_last_pick = false;
+	temp_rq = __migrate_task(max_rq, rf, stolen_task, min_cpu);
+	
 	double_unlock_balance(max_rq, min_rq);
 	raw_spin_unlock_irqrestore(&max_rq->lock, rf->flags);
 	//printk("[load balancing] pid: %d\tCPU%d -> CPU%d\n", stolen_task->pid, max_cpu, min_cpu);
