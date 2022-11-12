@@ -560,7 +560,7 @@ struct rq *migrate_task_wfq(struct rq *rq, struct rq_flags *rf,
 
 static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 {
-	struct rq_flags *rf;
+	/*struct rq_flags *rf;
 	struct rq *rq, *max_rq, *min_rq, *temp_rq;
 	int i;
 	unsigned long max_weight = 0, min_weight =  MAX_WEIGHT_WFQ;
@@ -579,7 +579,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	max_rq = cpu_rq(max_cpu);
 	min_rq = cpu_rq(min_cpu);
 	
-	/* no valid cpu found */
+	
 	if (max_cpu == min_cpu) {
 		return;
 	}
@@ -605,7 +605,7 @@ static __latent_entropy void load_balance_wfq(struct softirq_action *h)
 	rq_unlock(temp_rq, rf);
 	raw_spin_unlock(&stolen_task->pi_lock);
 
-	is_periodic_balance_req = false;
+	is_periodic_balance_req = false;*/
 }
 
 /*
@@ -635,7 +635,7 @@ void trigger_load_balance_wfq(struct rq *rq)
 /* idle load balancing implementation */
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
-	/*unsigned long max_weight = 0;
+	unsigned long max_weight = 0;
 	unsigned long max_weight_2 = 0;
 	int i;
 	int this_cpu_idx = 0;
@@ -647,7 +647,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	struct task_struct *curr;
 	struct task_struct *stolen_task;
 	int this_cpu = rq->cpu;
-	unsigned long flags;
+	unsigned long flags = 0;
 		
 	if (!cpu_active(this_cpu))
 		return 0;
@@ -657,7 +657,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 
 	if (rq->wfq.nr_running != 0)
 		return 1;
-	*/
+	
 	/*for_each_online_cpu(i) {
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
@@ -676,7 +676,7 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	}*/
 
 
-	/*spin_lock_irqsave(&min_max_lock, flags);
+	spin_lock_irqsave(&min_max_lock, flags);
 	max_cpu_idx = highest_weight_cpu;
 	max_weight = highest_weight_among_cpus;
 	max_cpu_idx_2 = highest_weight_cpu;
@@ -703,11 +703,11 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	spin_unlock_irqrestore(&min_max_lock, flags);
 		
 	double_lock_balance(rq, max_rq);
-	*/
+	
 	/* no valid cpu found */
-	//rcu_read_lock();
+	rcu_read_lock();
 
-	/*if (max_rq->wfq.nr_running < 2) {
+	if (max_rq->wfq.nr_running < 2) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
 		return 0;
@@ -740,9 +740,9 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	resched_curr(rq);
 	rcu_read_unlock();
 	double_unlock_balance(rq, max_rq);
-	*/
+	
 
-	return 0;
+	return 1;
 }
 
 static int
