@@ -3114,7 +3114,7 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->wfq_weight.weight = 10;
 	p->wfq_weight_change = 0;
 	INIT_LIST_HEAD(&p->wfq);
-		
+
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -7077,12 +7077,12 @@ void __init sched_init(void)
 
 	/* Make sure the linker didn't screw up */
 	/*BUG_ON(&idle_sched_class + 1 != &wfq_sched_class ||
-		&wfq_sched_class + 1 != &fair_sched_class ||
-	       &fair_sched_class + 1 != &rt_sched_class ||
-	       &rt_sched_class + 1   != &dl_sched_class);
-#ifdef CONFIG_SMP
-	BUG_ON(&dl_sched_class + 1 != &stop_sched_class);
-#endif
+	 * &wfq_sched_class + 1 != &fair_sched_class ||
+	 *    &fair_sched_class + 1 != &rt_sched_class ||
+	 *     &rt_sched_class + 1   != &dl_sched_class);
+	 * #ifdef CONFIG_SMP
+	 * 	BUG_ON(&dl_sched_class + 1 != &stop_sched_class);
+	 * #endif
 	*/
 	wait_bit_init();
 
@@ -8507,12 +8507,12 @@ void call_trace_sched_update_nr_running(struct rq *rq, int count)
         trace_sched_update_nr_running_tp(rq, count);
 }
 
-/* This system call will fill the buffer with the required values 
- * i.e. the total number of CPUs, the number of WFQ processes on each 
- * CPU and the total weight of WFQ processes on each CPU. 
+/* This system call will fill the buffer with the required values
+ * i.e. the total number of CPUs, the number of WFQ processes on each
+ * CPU and the total weight of WFQ processes on each CPU.
  * Return value will also be the total number of CPUs.
  * System call number 441
- */ 
+ */
 SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 {
 	struct wfq_info wfq_info_local;
@@ -8529,16 +8529,17 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 
 			rq_cpu = cpu_rq(i);
 			rq_lock(rq_cpu, &rf);
-			wfq_info_local.nr_running[wfq_info_local.num_cpus] = rq_cpu->wfq.nr_running;
-			wfq_info_local.total_weight[wfq_info_local.num_cpus] = rq_cpu->wfq.load.weight;
+			wfq_info_local.nr_running[wfq_info_local.num_cpus] =
+				rq_cpu->wfq.nr_running;
+			wfq_info_local.total_weight[wfq_info_local.num_cpus] =
+				rq_cpu->wfq.load.weight;
 			rq_unlock(rq_cpu, &rf);
 		}
 		(wfq_info_local.num_cpus)++;
 	}
-	
-	if (copy_to_user(wfq_info_struct, &wfq_info_local, sizeof(struct wfq_info))) {
+
+	if (copy_to_user(wfq_info_struct, &wfq_info_local, sizeof(struct wfq_info)))
 		return -EFAULT;
-	}
 
 	return wfq_info_local.num_cpus;
 }
@@ -8546,9 +8547,9 @@ SYSCALL_DEFINE1(get_wfq_info, struct wfq_info __user *, wfq_info_struct)
 /* This system call will change the weight for the calling process.
  * Only a root user should be able to increase the weight beyond
  * the default value of 10.  The system call should return an error
- * for any weight less than 1. 
+ * for any weight less than 1.
  * System call number 442.
- */ 
+ */
 SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 {
 	struct rq *rq;
@@ -8566,15 +8567,14 @@ SYSCALL_DEFINE1(set_wfq_weight, int, weight)
 
 	current->wfq_weight_change = weight - (current->wfq_weight.weight);
 	current->wfq_weight.weight = weight;
-	
-	
+
 	if (current->sched_class != &wfq_sched_class)
 		return 0;
-	
+
 	rq = task_rq(current);
 	rq_lock(rq, &rf);
 	current->sched_class->enqueue_task(rq, current, ENQUEUE_WFQ_WEIGHT_UPD);
 	rq_unlock(rq, &rf);
-	
+
 	return 0;
 }

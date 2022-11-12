@@ -710,7 +710,7 @@ struct task_struct {
 	struct task_group		*sched_task_group;
 #endif
 	struct sched_dl_entity		dl;
-	
+
 	struct list_head		wfq;
 	struct load_weight		wfq_weight;
 	s64				wfq_weight_change;
