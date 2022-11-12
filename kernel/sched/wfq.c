@@ -85,14 +85,14 @@ static void D_swap(void)
 	u64 temp_weight;
 
 	if (D_lowest_weight_among_cpus > D_s_lowest_weight_among_cpus) {
-			temp_cpu = D_lowest_weight_cpu;
-			temp_weight = D_lowest_weight_among_cpus;
+		temp_cpu = D_lowest_weight_cpu;
+		temp_weight = D_lowest_weight_among_cpus;
 
-			D_lowest_weight_cpu = D_s_lowest_weight_cpu;
-			D_lowest_weight_among_cpus = D_s_lowest_weight_among_cpus;
+		D_lowest_weight_cpu = D_s_lowest_weight_cpu;
+		D_lowest_weight_among_cpus = D_s_lowest_weight_among_cpus;
 
-			D_s_lowest_weight_cpu = temp_cpu;
-			D_s_lowest_weight_among_cpus = temp_weight;
+		D_s_lowest_weight_cpu = temp_cpu;
+		D_s_lowest_weight_among_cpus = temp_weight;
 	}
 }
 
@@ -109,13 +109,13 @@ static void D_reorder_l(int r, int this_cpu, u64 this_weight)
 		D_lowest_weight_among_cpus = this_weight;
 
 		D_s_lowest_weight_cpu = temp_cpu;
-		D_s_lowest_weight_among_cpus = temp_weight;		
+		D_s_lowest_weight_among_cpus = temp_weight;
 	} else if (r == 2) {
 		D_s_lowest_weight_cpu = this_cpu;
-		D_s_lowest_weight_among_cpus = this_weight;		
+		D_s_lowest_weight_among_cpus = this_weight;
 	}
 }
-		
+
 static void update_dMax(struct rq *rq)
 {
 	int this_cpu = rq->cpu;
@@ -158,7 +158,7 @@ static void swap_hl(int s)
 			lowest_weight_among_cpus = s_lowest_weight_among_cpus;
 			s_lowest_weight_cpu = temp_cpu;
 			s_lowest_weight_among_cpus = temp_weight;
-		}	
+		}
 	}
 }
 
@@ -177,7 +177,7 @@ static void reorder_h(int r, int this_cpu, u64 this_weight)
 		s_highest_weight_among_cpus = temp_weight;
 	} else if (r == 2) {
 		s_highest_weight_cpu = this_cpu;
-		s_highest_weight_among_cpus = this_weight;		
+		s_highest_weight_among_cpus = this_weight;
 	}
 }
 
@@ -199,7 +199,6 @@ static void reorder_l(int r, int this_cpu, u64 this_weight)
 	}
 }
 
-	
 static void update_min_max_cpu_buf(struct rq *rq)
 {
 	int this_cpu = rq->cpu;
@@ -244,7 +243,7 @@ enqueue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	unsigned long flags_2 = 0;
 
 	if (p->sched_class != &wfq_sched_class)
-		return;	
+		return;
 
 	is_periodic_balance_req = true;
 	if (flags & ENQUEUE_WFQ_ADD_EXACT) {
@@ -316,7 +315,7 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 	unsigned long flags_2 = 0;
 
 	if (p->sched_class != &wfq_sched_class)
-		return;	
+		return;
 
 	if (rq->wfq.nr_running == 0)
 		return;
@@ -346,7 +345,7 @@ static void dequeue_task_wfq(struct rq *rq, struct task_struct *p, int flags)
 		update_dMax(rq);
 	} else
 		update_dMax(rq);
-	spin_unlock_irqrestore(&min_max_lock, flags_2);	
+	spin_unlock_irqrestore(&min_max_lock, flags_2);
 }
 
 static void yield_task_wfq(struct rq *rq)
@@ -359,7 +358,7 @@ static void yield_task_wfq(struct rq *rq)
 static void check_preempt_curr_wfq(struct rq *rq, struct task_struct *p, int flags)
 {
 	if (p->sched_class != &wfq_sched_class)
-		return;	
+		return;
 	if ((rq->wfq.max_weight < find_vft(p))  && (rq->wfq.curr != p))
 		resched_curr(rq);
 }
@@ -421,7 +420,7 @@ static void task_tick_wfq(struct rq *rq, struct task_struct *curr, int queued)
 		temp = new_vruntime_val - diff;
 		curr->wfq_vruntime = temp;
 	}
-	
+
 	/*Ideally it should be (1/total_task_weight).
 	 * We count it and wherever required divide
 	 */
@@ -662,7 +661,7 @@ select_task_rq_wfq(struct task_struct *p, int cpu, int sd_flag, int flags)
 	 *struct rq *rq_cpu;
 	 *
 	 *for_each_online_cpu(i) {
-	 *	
+	 *
 	 *	rq_cpu = cpu_rq(i);
 	 *	rq_lock(rq_cpu, &rf);
 	 *

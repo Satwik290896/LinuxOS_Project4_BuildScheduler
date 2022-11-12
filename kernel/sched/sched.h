@@ -554,7 +554,7 @@ struct wfq_rq {
 	u64			rq_cpu_runtime;
 	unsigned long		max_weight;
 	int			on_list;
-	struct task_group	*tg;	/* group that "owns" this runqueue */	
+	struct task_group	*tg;	/* group that "owns" this runqueue */
 };
 
 /* CFS-related fields in a runqueue */
