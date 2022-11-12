@@ -679,8 +679,8 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 	spin_lock_irqsave(&min_max_lock, flags);
 	max_cpu_idx = highest_weight_cpu;
 	max_weight = highest_weight_among_cpus;
-	max_cpu_idx_2 = highest_weight_cpu;
-	max_weight_2 = highest_weight_among_cpus;
+	max_cpu_idx_2 = s_highest_weight_cpu;
+	max_weight_2 = s_highest_weight_among_cpus;
 	
 	
 	if ((max_weight == 0) || (max_cpu_idx == rq->cpu) ) {
