@@ -636,35 +636,29 @@ void trigger_load_balance_wfq(struct rq *rq)
 static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
 {
 	unsigned long max_weight = 0;
-	unsigned long max_weight_2 = 0;
 	int i;
 	int this_cpu_idx = 0;
 	int max_cpu_idx = 0;
-	int max_cpu_idx_2 = 0;
 	int found_swappable_rq = 0;
 	struct rq *max_rq;
 	int found_eligible = 0;
 	struct task_struct *curr;
 	struct task_struct *stolen_task;
 	int this_cpu = rq->cpu;
-	unsigned long flags = 0;
 		
 	if (!cpu_active(this_cpu))
 		return 0;
 		
 	if (p->sched_class != &wfq_sched_class)
 		return 0;
-
 	if (rq->wfq.nr_running != 0)
 		return 1;
-	
-	/*for_each_online_cpu(i) {
+	for_each_online_cpu(i) {
 		struct rq *rq_cpu = cpu_rq(i);
 		if (rq_cpu == rq) {
 			this_cpu_idx = i;
 			continue;
 		}
-
 		double_lock_balance(rq, rq_cpu);
 		if ((rq_cpu->wfq.load.weight > max_weight) && (rq_cpu->wfq.nr_running >= 2)) {
 			found_swappable_rq = 1;
@@ -673,46 +667,18 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 			max_rq = rq_cpu;
 		}
 		double_unlock_balance(rq, rq_cpu);
-	}*/
-
-
-	spin_lock_irqsave(&min_max_lock, flags);
-	max_cpu_idx = highest_weight_cpu;
-	max_weight = highest_weight_among_cpus;
-	max_cpu_idx_2 = s_highest_weight_cpu;
-	max_weight_2 = s_highest_weight_among_cpus;
-	
-	
-	if ((max_weight == 0) || (max_cpu_idx == rq->cpu) ) {
-		if ((max_weight_2 == 0) || (max_cpu_idx_2 == rq->cpu) )
-			found_swappable_rq = 0;
-		else {
-			max_weight = max_weight_2;
-			max_cpu_idx = max_cpu_idx_2;
-			found_swappable_rq = 1;
-		}
 	}
-		
-	if (found_swappable_rq == 0) {
-		spin_unlock_irqrestore(&min_max_lock, flags);
+	
+	if (found_swappable_rq == 0)
 		return 0;
-	}
-	else {
-		max_rq = cpu_rq(max_cpu_idx);
-	}
-	spin_unlock_irqrestore(&min_max_lock, flags);
-		
-	double_lock_balance(rq, max_rq);
 	
-	/* no valid cpu found */
+	double_lock_balance(rq, max_rq);
 	rcu_read_lock();
-
 	if (max_rq->wfq.nr_running < 2) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
 		return 0;
 	}
-
 	list_for_each_entry(curr, &(max_rq->wfq.wfq_rq_list), wfq) {
 		if (curr->sched_class != &wfq_sched_class)
 			continue;
@@ -722,26 +688,21 @@ static int balance_wfq(struct rq *rq, struct task_struct *p, struct rq_flags *rf
 			continue;
 		if (task_running(max_rq, curr))
 			continue;
-
 		stolen_task = curr;
 		found_eligible = 1;
 		break;
 	}
-
 	if (found_eligible == 0) {
 		double_unlock_balance(rq, max_rq);
 		rcu_read_unlock();
 		return 0;
 	}
-
 	deactivate_task(max_rq, stolen_task, 0);
 	set_task_cpu(stolen_task, this_cpu_idx);
 	activate_task(rq, stolen_task, 0);
 	resched_curr(rq);
 	rcu_read_unlock();
 	double_unlock_balance(rq, max_rq);
-	
-
 	return 1;
 }
 
